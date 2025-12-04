@@ -1,0 +1,19 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Auto-format code before commit
+npm run format
+
+# Run linter
+npm run lint
+
+# Run typecheck
+npm run typecheck
+
+# If any of the above failed, exit with error
+if [ $? -ne 0 ]; then
+  echo "❌ Pre-commit checks failed. Please fix the issues above."
+  exit 1
+fi
+
+echo "✅ All pre-commit checks passed!"
