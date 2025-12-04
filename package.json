@@ -1,0 +1,90 @@
+{
+  "name": "fastify-gold-standard-starter",
+  "version": "1.0.0",
+  "description": "Production-ready Fastify starter with TypeScript, Prisma, Docker, Prometheus, and DriftOS' Golden Orchestrator pattern",
+  "author": "DriftOS",
+  "license": "MIT",
+  "main": "dist/server.js",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/server.ts",
+    "build": "tsup && prisma generate",
+    "start": "prisma migrate deploy && node dist/server.js",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write \"src/**/*.{ts,json,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,json,md}\"",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "docker:up": "docker-compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker-compose -f docker/docker-compose.yml down",
+    "docker:logs": "docker-compose -f docker/docker-compose.yml logs -f",
+    "generate": "plop",
+    "generate:service": "plop service",
+    "generate:operation": "plop operation",
+    "generate:route": "plop route",
+    "generate:dashboards": "tsx scripts/generate-dashboards.ts",
+    "generate:cli": "node scripts/gen-service.mjs",
+    "load-test": "tsx scripts/load-test.ts",
+    "prepare": "husky install || true"
+  },
+  "dependencies": {
+    "@fastify/auth": "^4.5.0",
+    "@fastify/autoload": "^5.8.0",
+    "@fastify/cors": "^8.5.0",
+    "@fastify/env": "^4.3.0",
+    "@fastify/helmet": "^11.1.1",
+    "@fastify/jwt": "^7.2.4",
+    "@fastify/rate-limit": "^9.1.0",
+    "@fastify/sensible": "^5.5.0",
+    "@fastify/swagger": "^8.13.0",
+    "@fastify/swagger-ui": "^2.0.1",
+    "@fastify/type-provider-typebox": "^4.0.0",
+    "@prisma/client": "^5.7.1",
+    "@sinclair/typebox": "^0.32.5",
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3",
+    "fastify": "^4.25.1",
+    "fastify-plugin": "^5.1.0",
+    "pino": "^8.17.2",
+    "pino-pretty": "^10.3.1",
+    "prom-client": "^15.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "@typescript-eslint/eslint-plugin": "^6.17.0",
+    "@typescript-eslint/parser": "^6.17.0",
+    "@vitest/coverage-v8": "^1.1.1",
+    "@vitest/ui": "^1.1.1",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.2",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
+    "plop": "^4.0.1",
+    "prettier": "^3.1.1",
+    "prisma": "^5.7.1",
+    "tsup": "^8.0.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.1.1"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  }
+}

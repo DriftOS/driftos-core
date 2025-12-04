@@ -1,0 +1,62 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production build
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.DS_Store
+Thumbs.db
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+prisma/migrations/dev/
+
+# Docker
+docker/data/
+
+# Auto-generated dashboards (run npm run generate:dashboards)
+docker/grafana/provisioning/dashboards/auto-generated/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS files
+.DS_Store
+Desktop.ini
+
+# Package manager
+.yarn/
+.pnpm-store/

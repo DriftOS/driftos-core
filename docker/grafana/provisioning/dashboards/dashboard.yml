@@ -1,0 +1,24 @@
+apiVersion: 1
+
+providers:
+  # Manual/custom dashboards
+  - name: 'Manual Dashboards'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/manual
+  
+  # Auto-generated orchestrator dashboards
+  - name: 'Auto-Generated Dashboards'
+    orgId: 1
+    folder: 'Auto-Generated'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/provisioning/dashboards/auto-generated
