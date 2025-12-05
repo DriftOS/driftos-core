@@ -12,42 +12,57 @@ datasource db {
 }
 
 // Add models below
+model Conversation {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  branches  Branch[]
+  
+  @@map("conversations")
+}
 
-// User model
-model User {
+model Branch {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  parentId       String?
+  parent         Branch?      @relation("BranchTree", fields: [parentId], references: [id])
+  children       Branch[]     @relation("BranchTree")
+  summary        String?
+  centroid       Float[]
+  messages       Message[]
+  facts          Fact[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([conversationId])
+  @@index([parentId])
+  @@map("branches")
+}
+
+model Message {
   id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String
-  role      String   @default("user")
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  role      String
+  content   String
+  embedding Float[]
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  @@index([email])
-  @@map("users")
+  @@index([branchId])
+  @@map("messages")
 }
 
-// Todo model - demonstrates Golden Orchestrator pattern
-model Todo {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  completed   Boolean  @default(false)
-  userId      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model Fact {
+  id         String   @id @default(cuid())
+  branchId   String
+  branch     Branch   @relation(fields: [branchId], references: [id])
+  key        String
+  value      String
+  confidence Float
+  messageId  String?
+  createdAt  DateTime @default(now())
 
-  @@index([userId])
-  @@map("todos")
-}
-
-// Example model for demonstration
-model Example {
-  id          String   @id @default(cuid())
-  title       String
-  description String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("examples")
+  @@index([branchId])
+  @@map("facts")
 }

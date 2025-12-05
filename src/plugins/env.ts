@@ -2,7 +2,6 @@ import fp from 'fastify-plugin';
 import fastifyEnv from '@fastify/env';
 import { Type, Static } from '@sinclair/typebox';
 
-// Define environment schema
 const envSchema = Type.Object({
   NODE_ENV: Type.String({ default: 'development' }),
   PORT: Type.Number({ default: 3000 }),
@@ -11,10 +10,6 @@ const envSchema = Type.Object({
 
   // Database
   DATABASE_URL: Type.String(),
-
-  // Authentication
-  JWT_SECRET: Type.String(),
-  JWT_EXPIRES_IN: Type.String({ default: '7d' }),
 
   // API
   API_PREFIX: Type.String({ default: '/api' }),
@@ -35,11 +30,22 @@ const envSchema = Type.Object({
   // Swagger
   SWAGGER_ENABLED: Type.Boolean({ default: true }),
   SWAGGER_PATH: Type.String({ default: '/documentation' }),
+
+  // Drift Policies
+  DRIFT_MAX_BRANCHES_CONTEXT: Type.Number({ default: 10 }),
+
+  // Embeddings
+  EMBEDDING_MODEL: Type.String({ default: 'Xenova/all-MiniLM-L6-v2' }),
+
+  // LLM
+  LLM_PROVIDER: Type.String({ default: 'groq' }),
+  LLM_MODEL: Type.String({ default: 'llama-3.1-8b-instant' }),
+  LLM_API_KEY: Type.String({ default: '' }),
+  LLM_TIMEOUT: Type.Number({ default: 5000 }),
 });
 
 export type Env = Static<typeof envSchema>;
 
-// Extend Fastify instance type
 declare module 'fastify' {
   interface FastifyInstance {
     config: Env;
@@ -54,8 +60,22 @@ export default fp(
       dotenv: true,
       data: process.env,
     });
+
+    // Set the config for non-Fastify contexts
+    setConfig(fastify.config);
   },
   {
     name: 'env',
   }
 );
+
+// src/plugins/env.ts - add at bottom
+let config: Env | null = null;
+
+export function setConfig(c: Env) {
+  config = c;
+}
+export function getConfig(): Env {
+  if (!config) throw new Error('Config not initialized');
+  return config;
+}

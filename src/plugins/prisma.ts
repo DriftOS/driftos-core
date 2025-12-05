@@ -9,15 +9,16 @@ declare module 'fastify' {
   }
 }
 
-const prismaPlugin: FastifyPluginAsync = async (fastify, _options) => {
-  const prisma = new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
-  });
+// Singleton instance - exported for use outside Fastify context
+export const prisma = new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
+});
 
+const prismaPlugin: FastifyPluginAsync = async (fastify, _options) => {
   // Connect to database
   await prisma.$connect();
 
-  // Decorate Fastify instance with Prisma client
+  // Decorate Fastify instance with same instance
   fastify.decorate('prisma', prisma);
 
   // Graceful shutdown

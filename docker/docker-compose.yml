@@ -1,15 +1,15 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: fastify_postgres
+    container_name: driftos_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-fastify_starter}
+      POSTGRES_DB: ${POSTGRES_DB:-driftos_core}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - driftos_postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
@@ -19,33 +19,33 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    container_name: fastify_prometheus
+    container_name: driftos_prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
+      - driftos_prometheus_data:/prometheus
     ports:
-      - "9090:9090"
+      - "9091:9090"
     depends_on:
       - postgres
 
   grafana:
     image: grafana/grafana:latest
-    container_name: fastify_grafana
+    container_name: driftos_grafana
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_SECURITY_ADMIN_USER=admin
     volumes:
-      - grafana_data:/var/lib/grafana
+      - driftos_grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
-      - "3001:3000"
+      - "3002:3000"
     depends_on:
       - prometheus
 
 volumes:
-  postgres_data:
-  prometheus_data:
-  grafana_data:
+  driftos_postgres_data:
+  driftos_prometheus_data:
+  driftos_grafana_data:

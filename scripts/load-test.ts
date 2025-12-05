@@ -2,22 +2,25 @@
 
 /**
  * Load Test Script - Simulates Production Traffic
- * 
- * Continuously sends requests to the API to generate metrics
+ *
+ * Continuously sends requests to the Drift API to generate metrics
  * and make the dashboard "light up" with data!
  */
 
 const API_URL = process.env.API_URL || 'http://localhost:3000';
-const REQUESTS_PER_SECOND = parseInt(process.env.RPS || '1', 10); // Default 1 req/s (safe for 100/min rate limit)
+const REQUESTS_PER_SECOND = parseInt(process.env.RPS || '1', 10);
 const DURATION_MINUTES = parseInt(process.env.DURATION || '60', 10);
-const RANDOMIZE = process.env.RANDOMIZE !== 'false'; // Enable randomization by default
-const JITTER_PERCENT = parseFloat(process.env.JITTER || '30'); // 30% timing variance
+const RANDOMIZE = process.env.RANDOMIZE !== 'false';
+const JITTER_PERCENT = parseFloat(process.env.JITTER || '30');
 
 interface Stats {
   total: number;
   success: number;
   errors: number;
   rateLimited: number;
+  stays: number;
+  routes: number;
+  branches: number;
   avgLatency: number;
   latencies: number[];
 }
@@ -27,104 +30,124 @@ const stats: Stats = {
   success: 0,
   errors: 0,
   rateLimited: 0,
+  stays: 0,
+  routes: 0,
+  branches: 0,
   avgLatency: 0,
   latencies: [],
 };
 
-let authToken: string = '';
-
-const TODO_TITLES = [
-  'Build awesome feature',
-  'Fix critical bug',
-  'Write documentation',
-  'Review pull request',
-  'Deploy to production',
-  'Optimize performance',
-  'Refactor legacy code',
-  'Add unit tests',
-  'Update dependencies',
-  'Design new UI',
-  'Implement authentication',
-  'Setup CI/CD pipeline',
-  'Monitor metrics',
-  'Debug issue',
-  'Prepare release',
+// Simulated conversation topics for realistic drift testing
+const CONVERSATIONS = [
+  {
+    id: 'conv-planning-trip',
+    messages: [
+      'I want to plan a trip to Japan',
+      'What are the best places to visit in Tokyo?',
+      'How much does a JR rail pass cost?',
+      'Should I stay in Shinjuku or Shibuya?',
+      'What about the cherry blossom season?',
+      'How do I get from Narita to the city?',
+      'Any good ramen spots you recommend?',
+      'I need to fix my bathroom sink',  // BRANCH
+      'The faucet is leaking badly',
+      'Should I call a plumber?',
+      'Back to Japan - do I need a visa?',  // ROUTE
+      'What temples should I see in Kyoto?',
+    ],
+  },
+  {
+    id: 'conv-buying-car',
+    messages: [
+      'I want to buy an electric car',
+      'How does the Tesla Model 3 compare to Model Y?',
+      'What about the charging network?',
+      'How much does insurance cost for EVs?',
+      'What tax credits are available?',
+      'Can I charge at home with 110v?',
+      'What is the best recipe for pasta carbonara?',  // BRANCH
+      'Should I use guanciale or pancetta?',
+      'How many eggs per serving?',
+      'Back to cars - what about the Rivian?',  // ROUTE
+      'How long is the EV tax credit valid?',
+    ],
+  },
+  {
+    id: 'conv-learning-guitar',
+    messages: [
+      'I want to learn to play guitar',
+      'Should I start with acoustic or electric?',
+      'What are the basic chords I need?',
+      'How often should I practice?',
+      'Any good YouTube tutorials?',
+      'My fingers hurt - is that normal?',
+      'What laptop should I buy for work?',  // BRANCH
+      'I need at least 16GB RAM',
+      'Mac or Windows for programming?',
+      'Anyway, back to guitar - what songs are easy?',  // ROUTE
+      'Should I learn tabs or sheet music?',
+    ],
+  },
 ];
 
-/**
- * Login and get auth token
- */
-async function login(): Promise<string> {
-  const credentials = {
-    email: 'loadtest@example.com',
-    password: 'LoadTest123!',
-  };
-  
-  try {
-    // Try to login first
-    const loginResponse = await fetch(`${API_URL}/api/v1/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials),
-    });
-    
-    if (loginResponse.ok) {
-      const data = await loginResponse.json();
-      return data.data.token;
-    }
-    
-    // If login fails, try to register
-    const registerResponse = await fetch(`${API_URL}/api/v1/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...credentials,
-        name: 'Load Test User',
-      }),
-    });
-    
-    if (registerResponse.ok) {
-      const data = await registerResponse.json();
-      return data.data.token;
-    }
-    
-    throw new Error('Failed to login or register');
-  } catch (error) {
-    console.error('❌ Authentication failed:', error instanceof Error ? error.message : error);
-    process.exit(1);
-  }
-}
+// Track conversation state
+const conversationState: Map<string, { branchId?: string; messageIndex: number }> = new Map();
 
 /**
- * Create a todo via API
+ * Send a drift route request
  */
-async function createTodo(): Promise<void> {
-  const title = TODO_TITLES[Math.floor(Math.random() * TODO_TITLES.length)];
+async function sendDriftRequest(): Promise<void> {
+  // Pick a random conversation
+  const conv = CONVERSATIONS[Math.floor(Math.random() * CONVERSATIONS.length)];
+
+  // Get or initialize state for this conversation
+  let state = conversationState.get(conv.id);
+  if (!state) {
+    state = { messageIndex: 0 };
+    conversationState.set(conv.id, state);
+  }
+
+  // Get message (cycle through messages)
+  const content = conv.messages[state.messageIndex % conv.messages.length];
+  state.messageIndex++;
+
   const start = Date.now();
-  
+
   try {
-    const response = await fetch(`${API_URL}/api/v1/todos`, {
+    const response = await fetch(`${API_URL}/api/v1/drift/route`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ 
-        title,
-        description: 'Generated by load tester'
+      body: JSON.stringify({
+        conversationId: conv.id,
+        content,
+        role: 'user',
+        currentBranchId: state.branchId,
       }),
     });
-    
+
     const latency = Date.now() - start;
     stats.latencies.push(latency);
     stats.total++;
-    
+
     if (response.ok) {
+      const data = await response.json();
       stats.success++;
+
+      // Track routing actions
+      const action = data.data?.action;
+      if (action === 'STAY') stats.stays++;
+      else if (action === 'ROUTE') stats.routes++;
+      else if (action === 'BRANCH') stats.branches++;
+
+      // Update branch state for next request
+      if (data.data?.branchId) {
+        state.branchId = data.data.branchId;
+      }
     } else if (response.status === 429) {
       stats.rateLimited++;
       stats.errors++;
-      // Don't log every rate limit error, just track it
     } else {
       stats.errors++;
       console.error(`❌ Error ${response.status}: ${await response.text()}`);
@@ -141,20 +164,20 @@ async function createTodo(): Promise<void> {
  */
 function displayStats(): void {
   if (stats.latencies.length === 0) return;
-  
+
   const sorted = [...stats.latencies].sort((a, b) => a - b);
   const avg = stats.latencies.reduce((a, b) => a + b, 0) / stats.latencies.length;
   const p50 = sorted[Math.floor(sorted.length * 0.5)];
   const p95 = sorted[Math.floor(sorted.length * 0.95)];
   const p99 = sorted[Math.floor(sorted.length * 0.99)];
-  
+
   const successRate = ((stats.success / stats.total) * 100).toFixed(1);
   const errorRate = ((stats.errors / stats.total) * 100).toFixed(1);
-  
+
   console.clear();
   console.log('╔════════════════════════════════════════════════════════════╗');
   console.log('║                                                            ║');
-  console.log('║   🚀 LOAD TEST GENERATOR - LIGHTING UP DASHBOARDS!        ║');
+  console.log('║   🌊 DRIFT LOAD TEST - LIGHTING UP DASHBOARDS!             ║');
   console.log('║                                                            ║');
   console.log('╚════════════════════════════════════════════════════════════╝');
   console.log('');
@@ -167,14 +190,19 @@ function displayStats(): void {
   }
   console.log(`   Rate:        ${REQUESTS_PER_SECOND.toString().padStart(8)} req/s (avg)`);
   console.log('');
+  console.log(`🌳 ROUTING ACTIONS`);
+  console.log(`   STAY:        ${stats.stays.toString().padStart(8)}`);
+  console.log(`   ROUTE:       ${stats.routes.toString().padStart(8)}`);
+  console.log(`   BRANCH:      ${stats.branches.toString().padStart(8)}`);
+  console.log('');
   console.log(`⚡ LATENCY`);
   console.log(`   Avg:         ${avg.toFixed(1).padStart(8)} ms`);
-  console.log(`   P50:         ${p50.toString().padStart(8)} ms`);
-  console.log(`   P95:         ${p95.toString().padStart(8)} ms`);
-  console.log(`   P99:         ${p99.toString().padStart(8)} ms`);
+  console.log(`   P50:         ${p50?.toString().padStart(8) ?? 'N/A'} ms`);
+  console.log(`   P95:         ${p95?.toString().padStart(8) ?? 'N/A'} ms`);
+  console.log(`   P99:         ${p99?.toString().padStart(8) ?? 'N/A'} ms`);
   console.log('');
-  console.log(`🎯 DASHBOARD`);
-  console.log(`   URL:         ${API_URL}`);
+  console.log(`🎯 TARGET`);
+  console.log(`   URL:         ${API_URL}/api/v1/drift/route`);
   console.log(`   Grafana:     http://localhost:3001`);
   console.log('');
   console.log(`💡 Press Ctrl+C to stop`);
@@ -188,12 +216,11 @@ function getNextDelay(baseInterval: number): number {
   if (!RANDOMIZE) {
     return baseInterval;
   }
-  
-  // Add jitter: random variance of ±JITTER_PERCENT
+
   const jitterAmount = baseInterval * (JITTER_PERCENT / 100);
   const minDelay = baseInterval - jitterAmount;
   const maxDelay = baseInterval + jitterAmount;
-  
+
   return Math.random() * (maxDelay - minDelay) + minDelay;
 }
 
@@ -201,30 +228,20 @@ function getNextDelay(baseInterval: number): number {
  * Main load test loop
  */
 async function runLoadTest(): Promise<void> {
-  console.log('🚀 Starting load test...\n');
-  
-  // Login first
-  console.log('🔐 Authenticating...');
-  authToken = await login();
-  console.log('✅ Authentication successful!\n');
-  
-  console.log(`Target: ${API_URL}/api/v1/todos`);
+  console.log('🌊 Starting Drift load test...\n');
+
+  console.log(`Target: ${API_URL}/api/v1/drift/route`);
   console.log(`Rate: ${REQUESTS_PER_SECOND} req/s (avg)`);
   console.log(`Randomized: ${RANDOMIZE ? `Yes (±${JITTER_PERCENT}% jitter)` : 'No'}`);
-  console.log(`Rate Limit: 100 req/min (built-in)`);
-  console.log(`Duration: ${DURATION_MINUTES} minutes\n`);
-  
-  if (REQUESTS_PER_SECOND > 1.5) {
-    console.log('⚠️  WARNING: RPS > 1.5 may hit rate limits (100/min)');
-    console.log('    Consider: RPS=1 for safe continuous testing\n');
-  }
-  
+  console.log(`Duration: ${DURATION_MINUTES} minutes`);
+  console.log(`Conversations: ${CONVERSATIONS.length}\n`);
+
   const baseInterval = 1000 / REQUESTS_PER_SECOND;
   const endTime = Date.now() + (DURATION_MINUTES * 60 * 1000);
-  
+
   // Display stats every second
   const statsInterval = setInterval(displayStats, 1000);
-  
+
   // Recursive function for randomized intervals
   const scheduleNextRequest = () => {
     if (Date.now() >= endTime) {
@@ -234,18 +251,18 @@ async function runLoadTest(): Promise<void> {
       process.exit(0);
       return;
     }
-    
+
     // Send request
-    createTodo().catch(console.error);
-    
+    sendDriftRequest().catch(console.error);
+
     // Schedule next request with jitter
     const nextDelay = getNextDelay(baseInterval);
     setTimeout(scheduleNextRequest, nextDelay);
   };
-  
+
   // Start the first request
   scheduleNextRequest();
-  
+
   // Handle Ctrl+C gracefully
   process.on('SIGINT', () => {
     clearInterval(statsInterval);
