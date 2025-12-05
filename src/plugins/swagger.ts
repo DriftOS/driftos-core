@@ -9,8 +9,9 @@ const swaggerPlugin: FastifyPluginAsync = async (fastify) => {
     openapi: {
       openapi: '3.0.0',
       info: {
-        title: 'Fastify Gold Standard API',
-        description: 'Production-ready Fastify starter with TypeScript, Prisma, and Docker',
+        title: 'DriftOS Core API',
+        description:
+          'Conversation routing and context management for AI applications. Route messages to semantic branches, extract structured facts with provenance, and assemble optimized LLM context.',
         version: '1.0.0',
       },
       // Don't set servers - let Swagger UI auto-detect from browser URL
@@ -18,26 +19,13 @@ const swaggerPlugin: FastifyPluginAsync = async (fastify) => {
       // Define tags here only if you want to control order or add descriptions
       tags: [
         { name: 'Health', description: 'Health check endpoints' },
-        { name: 'Auth', description: 'Authentication endpoints' },
-        { name: 'Users', description: 'User management endpoints' },
+        { name: 'Drift', description: 'Message routing and branch management for conversations.' },
         {
-          name: 'Todos',
-          description: 'Todo management (demonstrates Golden Orchestrator pattern)',
+          name: 'Facts',
+          description: 'Extract and retrieve structured facts from branch messages.',
         },
-        {
-          name: 'Example',
-          description: 'Example CRUD endpoints (demonstrates direct Prisma access)',
-        },
+        { name: 'Context', description: 'Assemble optimized LLM context from branches and facts.' },
       ],
-      components: {
-        securitySchemes: {
-          bearerAuth: {
-            type: 'http',
-            scheme: 'bearer',
-            bearerFormat: 'JWT',
-          },
-        },
-      },
     },
   });
 
