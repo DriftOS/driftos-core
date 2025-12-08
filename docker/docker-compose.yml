@@ -1,3 +1,4 @@
+name: driftos-core
 services:
   postgres:
     image: postgres:16-alpine

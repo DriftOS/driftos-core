@@ -45,7 +45,7 @@ export class DriftOrchestrator extends BaseOrchestrator<DriftContext, DriftResul
     return [
       { name: 'validate-input', operation: ops.validateInput, critical: true },
       { name: 'load-branches', operation: ops.loadBranches, critical: true },
-      { name: 'embed-message', operation: ops.embedMessage, critical: true },
+      //{ name: 'embed-message', operation: ops.embedMessage, critical: true },
       { name: 'classify-route', operation: ops.classifyRoute, critical: true },
       { name: 'execute-route', operation: ops.executeRoute, critical: true },
     ];
