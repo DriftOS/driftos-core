@@ -18,7 +18,7 @@ export async function classifyRoute(ctx: DriftContext): Promise<DriftContext> {
   // Call LLM
   const response = await callLLM(prompt, config);
 
-  const classification = parseResponse(response);
+  const classification = parseResponse(response, currentBranch?.id);
   ctx.classification = classification;
   ctx.reasonCodes.push(`classified_${classification.action.toLowerCase()}`);
 
