@@ -201,9 +201,10 @@ function displayStats(): void {
   console.log(`   P95:         ${p95?.toString().padStart(8) ?? 'N/A'} ms`);
   console.log(`   P99:         ${p99?.toString().padStart(8) ?? 'N/A'} ms`);
   console.log('');
+  const grafanaPort = process.env.GRAFANA_PORT || '3002';
   console.log(`🎯 TARGET`);
   console.log(`   URL:         ${API_URL}/api/v1/drift/route`);
-  console.log(`   Grafana:     http://localhost:3001`);
+  console.log(`   Grafana:     http://localhost:${grafanaPort}`);
   console.log('');
   console.log(`💡 Press Ctrl+C to stop`);
   console.log('');

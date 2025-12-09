@@ -410,10 +410,11 @@ async function main() {
     console.log(`✅ ${metadata.serviceName} → ${outputPath}`);
   }
   
+  const grafanaPort = process.env.GRAFANA_PORT || '3002';
   console.log(`\n🎉 Generated ${orchestrators.length} dashboard(s)!`);
   console.log('\nNext steps:');
   console.log('  1. Restart Grafana: npm run docker:down && npm run docker:up');
-  console.log('  2. Open http://localhost:3001');
+  console.log(`  2. Open http://localhost:${grafanaPort}`);
   console.log('  3. Navigate to Dashboards → Browse\n');
 }
 

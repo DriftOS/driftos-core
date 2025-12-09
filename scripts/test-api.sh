@@ -135,9 +135,9 @@ echo ""
 # 8. Swagger Documentation
 echo "8️⃣  API Documentation Available"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📚 Swagger UI: http://localhost:3000/documentation"
-echo "📊 Grafana:    http://localhost:3001 (admin/admin)"
-echo "📈 Prometheus: http://localhost:9090"
+echo "📚 Swagger UI: http://localhost:${PORT:-3000}/documentation"
+echo "📊 Grafana:    http://localhost:${GRAFANA_PORT:-3002} (admin/admin)"
+echo "📈 Prometheus: http://localhost:${PROMETHEUS_PORT:-9091}"
 echo ""
 
 # Summary

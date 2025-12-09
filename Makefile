@@ -78,7 +78,7 @@ logs:
 # Initialize PostgreSQL extensions (required for pgvector, etc.)
 db-extensions:
 	@echo "🔌 Ensuring PostgreSQL extensions are installed..."
-	@docker exec fastify_postgres psql -U postgres -d fastify_starter -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; CREATE EXTENSION IF NOT EXISTS "pgcrypto"; CREATE EXTENSION IF NOT EXISTS "vector";' 2>/dev/null || true
+	@docker exec driftos_postgres psql -U postgres -d driftos_core -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; CREATE EXTENSION IF NOT EXISTS "pgcrypto"; CREATE EXTENSION IF NOT EXISTS "vector";' 2>/dev/null || true
 
 # Main entry point - like DriftOS!
 up: docker-up
@@ -93,10 +93,10 @@ up: docker-up
 	@echo "✨ Everything is ready!"
 	@echo ""
 	@echo "📍 Services running:"
-	@echo "   • API:         http://localhost:3000"
-	@echo "   • Swagger:     http://localhost:3000/documentation"
-	@echo "   • Prometheus:  http://localhost:9090"
-	@echo "   • Grafana:     http://localhost:3001 (admin/admin)"
+	@echo "   • API:         http://localhost:$${PORT:-3000}"
+	@echo "   • Swagger:     http://localhost:$${PORT:-3000}/documentation"
+	@echo "   • Prometheus:  http://localhost:$${PROMETHEUS_PORT:-9091}"
+	@echo "   • Grafana:     http://localhost:$${GRAFANA_PORT:-3002} (admin/admin)"
 	@echo ""
 	@echo "🚀 Start the dev server in another terminal:"
 	@echo "   make dev"
@@ -108,7 +108,7 @@ up: docker-up
 # Open Grafana in browser
 grafana:
 	@echo "🎨 Opening Grafana..."
-	@open http://localhost:3001 || xdg-open http://localhost:3001 || echo "Open http://localhost:3001 in your browser"
+	@open http://localhost:$${GRAFANA_PORT:-3002} || xdg-open http://localhost:$${GRAFANA_PORT:-3002} || echo "Open http://localhost:$${GRAFANA_PORT:-3002} in your browser"
 
 # Test the API with authentication
 test-api:
