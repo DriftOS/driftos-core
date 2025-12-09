@@ -11,10 +11,11 @@ export const logger = pino({
     : {
         target: 'pino-pretty',
         options: {
-          translateTime: 'HH:MM:ss Z',
-          ignore: 'pid,hostname',
+          translateTime: 'HH:MM:ss',
+          ignore: 'pid,hostname,reqId,responseTime,req,res',
           colorize: true,
-          singleLine: false,
+          singleLine: true,
+          messageFormat: '{msg}',
         },
       },
   formatters: {
@@ -23,14 +24,21 @@ export const logger = pino({
     },
   },
   serializers: {
-    req: pino.stdSerializers.req,
-    res: pino.stdSerializers.res,
+    req: (req: { method?: string; url?: string }) => ({
+      method: req.method,
+      url: req.url,
+    }),
+    res: (res: { statusCode?: number }) => ({
+      statusCode: res.statusCode,
+    }),
     err: pino.stdSerializers.err,
   },
-  base: {
-    env: process.env.NODE_ENV,
-    revision: process.env.COMMIT_SHA ?? 'unknown',
-  },
+  base: isProduction
+    ? {
+        env: process.env.NODE_ENV,
+        revision: process.env.COMMIT_SHA ?? 'unknown',
+      }
+    : undefined,
 });
 
 // Create child loggers for specific modules

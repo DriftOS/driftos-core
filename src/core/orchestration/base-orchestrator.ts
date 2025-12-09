@@ -8,6 +8,7 @@ import type {
 import { PerformanceInterceptor } from './performance-interceptor.js';
 import { DefaultPerformanceTracker, NullPerformanceTracker } from './performance-tracker.js';
 import { OrchestratorMetrics } from './orchestrator-metrics.js';
+import { createLogger } from '../../utils/logger.js';
 
 /**
  * Abstract base class for all orchestrators following the golden pattern
@@ -18,8 +19,10 @@ export abstract class BaseOrchestrator<
   TInput = unknown,
 > {
   protected config: Required<OrchestratorConfig>;
+  protected logger;
 
   constructor(config: OrchestratorConfig) {
+    this.logger = createLogger(`orchestrator:${config.name}`);
     this.config = {
       name: config.name,
       timeout: config.timeout ?? 30000,
@@ -106,7 +109,7 @@ export abstract class BaseOrchestrator<
       }
 
       if (this.config.logErrors) {
-        console.error(`[${this.config.name}] Orchestration error:`, error);
+        this.logger.error({ err: error }, 'Orchestration error');
       }
 
       return {
@@ -199,7 +202,7 @@ export abstract class BaseOrchestrator<
 
         // For non-critical stages, log error and continue
         if (this.config.logErrors) {
-          console.warn(`[${this.config.name}] Non-critical stage '${stage.name}' failed:`, error);
+          this.logger.warn({ err: error, stage: stage.name }, 'Non-critical stage failed');
         }
 
         // Add error to context
