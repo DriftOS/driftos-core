@@ -195,7 +195,7 @@ Generic metrics with labels are:
 1. Start services: `make up`
 2. Start dev server: `make dev`
 3. Generate metrics: `make test-api`
-4. Open Grafana: http://localhost:3001 (admin/admin)
+4. Open Grafana: http://localhost:3002 (admin/admin)
 5. Dashboards → Browse → Your Service Performance
 
 **All metrics appear automatically!** 🎉

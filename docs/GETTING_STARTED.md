@@ -29,7 +29,7 @@ npm run dev
 - **API**: http://localhost:3000/api/v1
 - **Swagger**: http://localhost:3000/documentation
 - **Metrics**: http://localhost:3000/metrics
-- **Grafana**: http://localhost:3001 (admin/admin)
+- **Grafana**: http://localhost:3002 (admin/admin)
 
 ---
 
