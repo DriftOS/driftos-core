@@ -22,7 +22,7 @@ export async function buildApp() {
     trustProxy: true,
     requestIdHeader: 'x-request-id',
     requestIdLogLabel: 'requestId',
-    disableRequestLogging: false,
+    disableRequestLogging: true, // Disable verbose request/response logging
     maxParamLength: 200,
   }).withTypeProvider<TypeBoxTypeProvider>();
 

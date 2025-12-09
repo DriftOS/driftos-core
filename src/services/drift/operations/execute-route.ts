@@ -1,6 +1,9 @@
 import { factsService } from '@/services/facts';
 import type { DriftContext } from '../types';
 import { prisma } from '@plugins/prisma';
+import { createLogger } from '@utils/logger';
+
+const logger = createLogger('drift');
 
 /**
  * ExecuteRoute Operation
@@ -53,14 +56,18 @@ export async function executeRoute(ctx: DriftContext): Promise<DriftContext> {
     // Fire and forget - don't block response
     factsService
       .extract(ctx.currentBranch.id)
-      .catch((err) => console.error('Async fact extraction failed:', err));
+      .catch((err) =>
+        logger.warn({ err, branchId: ctx.currentBranch?.id }, 'Async fact extraction failed')
+      );
     ctx.reasonCodes.push('facts_extraction_triggered');
   }
 
   if (action === 'ROUTE' && ctx.currentBranch) {
     factsService
       .extract(ctx.currentBranch.id)
-      .catch((err) => console.error('Async fact extraction failed:', err));
+      .catch((err) =>
+        logger.warn({ err, branchId: ctx.currentBranch?.id }, 'Async fact extraction failed')
+      );
     ctx.reasonCodes.push('facts_extraction_triggered');
   }
 

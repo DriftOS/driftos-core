@@ -11,7 +11,7 @@ declare module 'fastify' {
 
 // Singleton instance - exported for use outside Fastify context
 export const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn', 'error'] : ['error'],
+  log: ['error'], // Only log errors - queries are too noisy
 });
 
 const prismaPlugin: FastifyPluginAsync = async (fastify, _options) => {
