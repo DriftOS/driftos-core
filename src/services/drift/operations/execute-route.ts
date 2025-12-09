@@ -98,6 +98,22 @@ export async function executeRoute(ctx: DriftContext): Promise<DriftContext> {
   return ctx;
 }
 
+/**
+ * Calculate running average centroid.
+ * Formula: new = old + (next - old) / n
+ */
+export function calculateCentroid(
+  oldCentroid: number[],
+  newEmbedding: number[],
+  messageCount: number
+): number[] {
+  if (oldCentroid.length === 0) {
+    return newEmbedding;
+  }
+
+  return oldCentroid.map((val, i) => val + (newEmbedding[i]! - val) / messageCount);
+}
+
 async function updateCentroid(branchId: string, newEmbedding: number[]): Promise<void> {
   const branch = await prisma.branch.findUniqueOrThrow({
     where: { id: branchId },
@@ -107,18 +123,7 @@ async function updateCentroid(branchId: string, newEmbedding: number[]): Promise
   const messageCount = branch._count.messages;
   const oldCentroid = branch.centroid as number[];
 
-  if (oldCentroid.length === 0) {
-    await prisma.branch.update({
-      where: { id: branchId },
-      data: { centroid: newEmbedding },
-    });
-    return;
-  }
-
-  // Running average: new = old + (new - old) / n
-  const updatedCentroid = oldCentroid.map(
-    (val, i) => val + (newEmbedding[i]! - val) / messageCount
-  );
+  const updatedCentroid = calculateCentroid(oldCentroid, newEmbedding, messageCount);
 
   await prisma.branch.update({
     where: { id: branchId },
