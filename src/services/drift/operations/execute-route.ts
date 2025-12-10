@@ -53,9 +53,16 @@ export async function executeRoute(ctx: DriftContext): Promise<DriftContext> {
 
   // Async fact extraction when leaving a branch
   if (action === 'BRANCH' && ctx.currentBranch) {
+    logger.info(
+      { action, oldBranchId: ctx.currentBranch.id },
+      'Triggering async fact extraction for old branch'
+    );
     // Fire and forget - don't block response
     factsService
       .extract(ctx.currentBranch.id)
+      .then((result) => {
+        logger.info({ branchId: ctx.currentBranch?.id, result }, 'Async fact extraction completed');
+      })
       .catch((err) =>
         logger.warn({ err, branchId: ctx.currentBranch?.id }, 'Async fact extraction failed')
       );
@@ -63,8 +70,15 @@ export async function executeRoute(ctx: DriftContext): Promise<DriftContext> {
   }
 
   if (action === 'ROUTE' && ctx.currentBranch) {
+    logger.info(
+      { action, oldBranchId: ctx.currentBranch.id },
+      'Triggering async fact extraction for old branch'
+    );
     factsService
       .extract(ctx.currentBranch.id)
+      .then((result) => {
+        logger.info({ branchId: ctx.currentBranch?.id, result }, 'Async fact extraction completed');
+      })
       .catch((err) =>
         logger.warn({ err, branchId: ctx.currentBranch?.id }, 'Async fact extraction failed')
       );

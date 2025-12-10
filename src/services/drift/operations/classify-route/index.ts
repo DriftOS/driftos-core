@@ -10,8 +10,21 @@ import { parseResponse, buildPrompt, callLLM } from './helpers';
 export async function classifyRoute(ctx: DriftContext): Promise<DriftContext> {
   const config = getConfig();
 
-  // Build prompt
   const currentBranch = ctx.branches?.find((b) => b.isCurrentBranch);
+
+  // Assistant messages always STAY - they are responses to user messages
+  // and should remain in the same branch context
+  if (ctx.role === 'assistant') {
+    ctx.classification = {
+      action: 'STAY',
+      reason: 'Assistant messages stay in current branch',
+      confidence: 1.0,
+    };
+    ctx.reasonCodes.push('assistant_auto_stay');
+    return ctx;
+  }
+
+  // Build prompt for user messages
   const otherBranches = ctx.branches?.filter((b) => !b.isCurrentBranch);
 
   const prompt = buildPrompt(ctx.content, currentBranch, otherBranches ?? []);
