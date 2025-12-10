@@ -15,6 +15,7 @@ import healthRoutes from './routes/health/index';
 import driftRoutes from './routes/drift/index';
 import factsRoutes from './routes/facts/index';
 import contextRoutes from './routes/context/index';
+import llmRoutes from './routes/llm/index';
 
 export async function buildApp() {
   const app = Fastify({
@@ -55,6 +56,7 @@ export async function buildApp() {
       await fastify.register(driftRoutes, { prefix: '/drift' });
       await fastify.register(factsRoutes, { prefix: '/facts' });
       await fastify.register(contextRoutes, { prefix: '/context' });
+      await fastify.register(llmRoutes, { prefix: '/llm' });
     },
     { prefix: `${app.config.API_PREFIX}/${app.config.API_VERSION}` }
   );
