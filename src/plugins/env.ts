@@ -42,6 +42,9 @@ const envSchema = Type.Object({
   LLM_MODEL: Type.String({ default: 'llama-3.1-8b-instant' }),
   LLM_API_KEY: Type.String({ default: '' }),
   LLM_TIMEOUT: Type.Number({ default: 5000 }),
+
+  // LLM Provider API Keys (for demo endpoint)
+  GROQ_API_KEY: Type.String({ default: '' }),
 });
 
 export type Env = Static<typeof envSchema>;

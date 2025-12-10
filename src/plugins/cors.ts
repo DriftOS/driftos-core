@@ -9,7 +9,7 @@ const corsPlugin: FastifyPluginAsync = async (fastify) => {
     origin: origins,
     credentials: fastify.config.CORS_CREDENTIALS,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-LLM-Key'],
     exposedHeaders: ['X-Request-Id'],
   });
 };
