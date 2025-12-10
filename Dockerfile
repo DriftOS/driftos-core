@@ -41,12 +41,13 @@ COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
 # Switch to non-root user
 USER nodejs
 
-# Expose port
+# Default port (Railway overrides via PORT env var)
+ENV PORT=3000
 EXPOSE 3000
 
-# Health check
+# Health check - uses PORT env var for Railway compatibility
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/v1/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); });"
+  CMD node -e "const port = process.env.PORT || 3000; require('http').get('http://localhost:' + port + '/api/v1/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); });"
 
 # Start application with dumb-init
 ENTRYPOINT ["dumb-init", "--"]
