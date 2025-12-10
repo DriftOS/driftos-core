@@ -30,6 +30,7 @@ export interface FactsContext extends OperationContext {
   messages?: Message[];
   extractedFacts?: ExtractedFact[];
   savedFacts?: Fact[];
+  branchTopic?: string;
 }
 
 export interface FactsResult {
