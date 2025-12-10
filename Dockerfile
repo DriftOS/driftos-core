@@ -55,6 +55,6 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD node -e "const port = process.env.PORT || 3000; require('http').get('http://localhost:' + port + '/api/v1/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); });"
 
-# Start application with dumb-init
+# Run migrations then start app
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "dist/server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
