@@ -18,26 +18,24 @@ const DEMO_ALLOWED_ROLES = ['user', 'assistant']; // prevent system role injecti
 
 // Simple in-memory rate limiter for demo endpoint
 const demoRateLimiter = new Map<string, { count: number; resetAt: number }>();
-const DEMO_RATE_LIMIT = 10; // requests per window
-const DEMO_RATE_WINDOW = 60 * 1000; // 1 minute
 
-function checkDemoRateLimit(ip: string): { allowed: boolean; remaining: number; resetIn: number } {
+function checkDemoRateLimit(ip: string, limit: number, window: number): { allowed: boolean; remaining: number; resetIn: number } {
   const now = Date.now();
   const record = demoRateLimiter.get(ip);
 
   if (!record || now > record.resetAt) {
-    demoRateLimiter.set(ip, { count: 1, resetAt: now + DEMO_RATE_WINDOW });
-    return { allowed: true, remaining: DEMO_RATE_LIMIT - 1, resetIn: DEMO_RATE_WINDOW };
+    demoRateLimiter.set(ip, { count: 1, resetAt: now + window });
+    return { allowed: true, remaining: limit - 1, resetIn: window };
   }
 
-  if (record.count >= DEMO_RATE_LIMIT) {
+  if (record.count >= limit) {
     return { allowed: false, remaining: 0, resetIn: record.resetAt - now };
   }
 
   record.count++;
   return {
     allowed: true,
-    remaining: DEMO_RATE_LIMIT - record.count,
+    remaining: limit - record.count,
     resetIn: record.resetAt - now,
   };
 }
@@ -255,8 +253,10 @@ const llmRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       const clientIp = request.ip || request.headers['x-forwarded-for'] || 'unknown';
       const ip = Array.isArray(clientIp) ? (clientIp[0] ?? 'unknown') : String(clientIp);
 
-      // Check rate limit
-      const rateLimit = checkDemoRateLimit(ip);
+      // Check rate limit using config values
+      const demoLimit = fastify.config.DEMO_RATE_LIMIT;
+      const demoWindow = fastify.config.DEMO_RATE_WINDOW;
+      const rateLimit = checkDemoRateLimit(ip, demoLimit, demoWindow);
       if (!rateLimit.allowed) {
         return reply.status(429).send({
           success: false,
@@ -268,7 +268,7 @@ const llmRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       }
 
       // Add rate limit headers
-      reply.header('X-RateLimit-Limit', DEMO_RATE_LIMIT);
+      reply.header('X-RateLimit-Limit', demoLimit);
       reply.header('X-RateLimit-Remaining', rateLimit.remaining);
       reply.header('X-RateLimit-Reset', Math.ceil(rateLimit.resetIn / 1000));
 

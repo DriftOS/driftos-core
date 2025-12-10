@@ -19,6 +19,10 @@ const envSchema = Type.Object({
   RATE_LIMIT_MAX: Type.Number({ default: 100 }),
   RATE_LIMIT_TIME_WINDOW: Type.Number({ default: 60000 }),
 
+  // Demo Endpoint Rate Limiting
+  DEMO_RATE_LIMIT: Type.Number({ default: 10 }),
+  DEMO_RATE_WINDOW: Type.Number({ default: 60000 }),
+
   // CORS
   CORS_ORIGIN: Type.String({ default: 'http://localhost:3001,http://localhost:3000' }),
   CORS_CREDENTIALS: Type.Boolean({ default: true }),
