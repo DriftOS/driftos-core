@@ -151,6 +151,116 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     }
   );
 
+  // Get conversation context (all messages across branches)
+  fastify.get(
+    '/:conversationId/context',
+    {
+      schema: {
+        description: 'Get conversation context with all messages',
+        tags: ['Conversations'],
+        params: Type.Object({
+          conversationId: Type.String(),
+        }),
+        querystring: Type.Object({
+          allBranches: Type.Optional(Type.Boolean({ default: false })),
+          maxMessages: Type.Optional(Type.Number({ default: 200 })),
+        }),
+        response: {
+          200: Type.Object({
+            success: Type.Literal(true),
+            data: Type.Object({
+              conversationId: Type.String(),
+              branchTopic: Type.String(),
+              messages: Type.Array(
+                Type.Object({
+                  id: Type.String(),
+                  role: Type.String(),
+                  content: Type.String(),
+                  branchId: Type.String(),
+                  createdAt: Type.String(),
+                })
+              ),
+              allFacts: Type.Array(
+                Type.Object({
+                  branchId: Type.String(),
+                  branchTopic: Type.String(),
+                  isCurrent: Type.Boolean(),
+                  facts: Type.Array(Type.Any()),
+                })
+              ),
+            }),
+          }),
+          404: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({ message: Type.String() }),
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const { conversationId } = request.params;
+      const { allBranches, maxMessages = 200 } = request.query;
+
+      const conversation = await fastify.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        include: {
+          branches: {
+            include: {
+              messages: {
+                orderBy: { createdAt: 'asc' },
+                take: allBranches ? undefined : maxMessages,
+              },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      });
+
+      if (!conversation) {
+        return reply.status(404).send({
+          success: false,
+          error: { message: 'Conversation not found' },
+        });
+      }
+
+      // Flatten messages from all branches if allBranches=true
+      const messages = allBranches
+        ? conversation.branches.flatMap((b) =>
+            b.messages.map((m) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              branchId: b.id,
+              createdAt: m.createdAt.toISOString(),
+            }))
+          ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()).slice(0, maxMessages)
+        : (conversation.branches[0]?.messages.map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            branchId: conversation.branches[0]!.id,
+            createdAt: m.createdAt.toISOString(),
+          })) ?? []);
+
+      const branchTopic = conversation.branches[0]?.summary || 'New conversation';
+
+      return reply.send({
+        success: true,
+        data: {
+          conversationId,
+          branchTopic,
+          messages,
+          allFacts: conversation.branches.map((b) => ({
+            branchId: b.id,
+            branchTopic: b.summary || 'Unknown',
+            isCurrent: b.id === conversation.branches[0]?.id,
+            facts: [],
+          })),
+        },
+      });
+    }
+  );
+
   // List branches for a conversation
   fastify.get(
     '/:conversationId/branches',
