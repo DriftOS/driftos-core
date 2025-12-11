@@ -5,7 +5,7 @@ import { Type, Static } from '@sinclair/typebox';
 const envSchema = Type.Object({
   NODE_ENV: Type.String({ default: 'development' }),
   PORT: Type.Number({ default: 3000 }),
-  HOST: Type.String({ default: '0.0.0.0' }),
+  HOST: Type.String({ default: '::' }),
   LOG_LEVEL: Type.String({ default: 'info' }),
 
   // Database
@@ -47,8 +47,10 @@ const envSchema = Type.Object({
   LLM_API_KEY: Type.String({ default: '' }),
   LLM_TIMEOUT: Type.Number({ default: 5000 }),
 
-  // LLM Provider API Keys (for demo endpoint)
+  // LLM Provider API Keys
   GROQ_API_KEY: Type.String({ default: '' }),
+  OPENAI_API_KEY: Type.String({ default: '' }),
+  ANTHROPIC_API_KEY: Type.String({ default: '' }),
 });
 
 export type Env = Static<typeof envSchema>;
