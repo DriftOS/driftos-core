@@ -31,7 +31,7 @@ export async function classifyRoute(ctx: DriftContext): Promise<DriftContext> {
   const response = await callLLM(prompt, config);
 
   const classification = parseResponse(response, currentBranch?.id);
-  
+
   // Safety check: First message MUST be BRANCH regardless of LLM response
   if (!currentBranch && otherBranches.length === 0 && classification.action !== 'BRANCH') {
     ctx.classification = {
@@ -43,7 +43,7 @@ export async function classifyRoute(ctx: DriftContext): Promise<DriftContext> {
     ctx.reasonCodes.push('first_message_forced_branch');
     return ctx;
   }
-  
+
   ctx.classification = classification;
   ctx.reasonCodes.push(`classified_${classification.action.toLowerCase()}`);
 

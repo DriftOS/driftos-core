@@ -19,7 +19,14 @@ const ROUTE_SCHEMA = {
 };
 
 const MODELS_WITH_JSON_SCHEMA: Record<string, string[]> = {
-  groq: ['llama-3.3-70b-versatile', 'llama-3.3-70b-specdec', 'llama3-70b-8192', 'llama3-8b-8192', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
+  groq: [
+    'llama-3.3-70b-versatile',
+    'llama-3.3-70b-specdec',
+    'llama3-70b-8192',
+    'llama3-8b-8192',
+    'mixtral-8x7b-32768',
+    'gemma2-9b-it',
+  ],
   openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'],
   anthropic: [], // Anthropic uses tool_use for structured output, not json_schema
 };
@@ -34,17 +41,17 @@ Do not include any other text, explanation, or markdown. Just the raw JSON objec
 function getProviderConfig(config: ReturnType<typeof getConfig>) {
   const provider = config.LLM_PROVIDER?.toLowerCase() || 'groq';
   const model = config.LLM_MODEL;
-  
+
   // Determine API key and endpoint based on provider
   let apiKey: string;
   let endpoint: string;
   let supportsJsonSchema: boolean;
-  
+
   switch (provider) {
     case 'openai':
       apiKey = config.OPENAI_API_KEY || config.LLM_API_KEY;
       endpoint = 'https://api.openai.com/v1/chat/completions';
-      supportsJsonSchema = (MODELS_WITH_JSON_SCHEMA.openai || []).some(m => model.includes(m));
+      supportsJsonSchema = (MODELS_WITH_JSON_SCHEMA.openai || []).some((m) => model.includes(m));
       break;
     case 'anthropic':
       apiKey = config.ANTHROPIC_API_KEY || config.LLM_API_KEY;
@@ -55,10 +62,10 @@ function getProviderConfig(config: ReturnType<typeof getConfig>) {
     default:
       apiKey = config.GROQ_API_KEY || config.LLM_API_KEY;
       endpoint = 'https://api.groq.com/openai/v1/chat/completions';
-      supportsJsonSchema = (MODELS_WITH_JSON_SCHEMA.groq || []).some(m => model.includes(m));
+      supportsJsonSchema = (MODELS_WITH_JSON_SCHEMA.groq || []).some((m) => model.includes(m));
       break;
   }
-  
+
   return { provider, apiKey, endpoint, supportsJsonSchema, model };
 }
 
@@ -67,20 +74,20 @@ async function callOpenAICompatible(
   providerConfig: ReturnType<typeof getProviderConfig>
 ): Promise<string> {
   const { apiKey, endpoint, supportsJsonSchema, model } = providerConfig;
-  
+
   const finalPrompt = supportsJsonSchema ? prompt : prompt + JSON_INSTRUCTION;
-  
+
   const body: Record<string, unknown> = {
     model,
     messages: [{ role: 'user', content: finalPrompt }],
     temperature: 0.1,
     max_tokens: 200,
   };
-  
+
   if (supportsJsonSchema) {
     body.response_format = ROUTE_SCHEMA;
   }
-  
+
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -104,9 +111,9 @@ async function callAnthropic(
   providerConfig: ReturnType<typeof getProviderConfig>
 ): Promise<string> {
   const { apiKey, model } = providerConfig;
-  
+
   const finalPrompt = prompt + JSON_INSTRUCTION;
-  
+
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -135,10 +142,10 @@ export async function callLLM(
   config: ReturnType<typeof getConfig>
 ): Promise<string> {
   const providerConfig = getProviderConfig(config);
-  
+
   if (providerConfig.provider === 'anthropic') {
     return callAnthropic(prompt, providerConfig);
   }
-  
+
   return callOpenAICompatible(prompt, providerConfig);
 }
