@@ -47,6 +47,11 @@ model Message {
   role      String
   content   String
   embedding Float[]
+  
+  // Drift routing decision
+  driftAction String?  // 'STAY' | 'BRANCH' | 'ROUTE'
+  driftReason String?  // Reason for the routing decision
+  
   createdAt DateTime @default(now())
 
   @@index([branchId])

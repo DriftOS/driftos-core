@@ -177,6 +177,9 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
                   role: Type.String(),
                   content: Type.String(),
                   branchId: Type.String(),
+                  branchTopic: Type.Optional(Type.String()),
+                  driftAction: Type.Optional(Type.String()),
+                  driftReason: Type.Optional(Type.String()),
                   createdAt: Type.String(),
                 })
               ),
@@ -232,6 +235,9 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
                 role: m.role,
                 content: m.content,
                 branchId: b.id,
+                branchTopic: b.summary || undefined,
+                driftAction: m.driftAction || undefined,
+                driftReason: m.driftReason || undefined,
                 createdAt: m.createdAt.toISOString(),
               }))
             )
@@ -242,6 +248,9 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             role: m.role,
             content: m.content,
             branchId: conversation.branches[0]!.id,
+            branchTopic: conversation.branches[0]!.summary || undefined,
+            driftAction: m.driftAction || undefined,
+            driftReason: m.driftReason || undefined,
             createdAt: m.createdAt.toISOString(),
           })) ?? []);
 

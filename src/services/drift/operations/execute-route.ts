@@ -85,13 +85,15 @@ export async function executeRoute(ctx: DriftContext): Promise<DriftContext> {
     ctx.reasonCodes.push('facts_extraction_triggered');
   }
 
-  // Create message
+  // Create message with drift routing info
   const message = await prisma.message.create({
     data: {
       branchId,
       role: ctx.role,
       content: ctx.content,
       embedding: ctx.embedding ?? [],
+      driftAction: ctx.classification.action,
+      driftReason: ctx.classification.reason,
     },
   });
 
