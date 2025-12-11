@@ -225,15 +225,18 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
       // Flatten messages from all branches if allBranches=true
       const messages = allBranches
-        ? conversation.branches.flatMap((b) =>
-            b.messages.map((m) => ({
-              id: m.id,
-              role: m.role,
-              content: m.content,
-              branchId: b.id,
-              createdAt: m.createdAt.toISOString(),
-            }))
-          ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()).slice(0, maxMessages)
+        ? conversation.branches
+            .flatMap((b) =>
+              b.messages.map((m) => ({
+                id: m.id,
+                role: m.role,
+                content: m.content,
+                branchId: b.id,
+                createdAt: m.createdAt.toISOString(),
+              }))
+            )
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+            .slice(0, maxMessages)
         : (conversation.branches[0]?.messages.map((m) => ({
             id: m.id,
             role: m.role,
