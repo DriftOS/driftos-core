@@ -19,7 +19,11 @@ const DEMO_ALLOWED_ROLES = ['user', 'assistant']; // prevent system role injecti
 // Simple in-memory rate limiter for demo endpoint
 const demoRateLimiter = new Map<string, { count: number; resetAt: number }>();
 
-function checkDemoRateLimit(ip: string, limit: number, window: number): { allowed: boolean; remaining: number; resetIn: number } {
+function checkDemoRateLimit(
+  ip: string,
+  limit: number,
+  window: number
+): { allowed: boolean; remaining: number; resetIn: number } {
   const now = Date.now();
   const record = demoRateLimiter.get(ip);
 

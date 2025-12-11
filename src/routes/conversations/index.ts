@@ -3,13 +3,12 @@ import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 
 /**
  * Conversations Routes
- * 
+ *
  * GET  /conversations              - List conversations by prefix
  * GET  /conversations/:id          - Get conversation summary
  * GET  /conversations/:id/branches - List all branches
  */
 const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
-  
   // List conversations by prefix (for device-based filtering)
   fastify.get(
     '/',
