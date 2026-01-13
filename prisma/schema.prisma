@@ -1,5 +1,5 @@
-// This is your Prisma schema file
-// Learn more: https://pris.ly/d/prisma-schema
+// DriftOS Embed - Prisma Schema
+// Patent-compliant conversation graph with dual-axis drift detection
 
 generator client {
   provider      = "prisma-client-js"
@@ -11,63 +11,285 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Add models below
+// ============================================================================
+// Core Models
+// ============================================================================
+
 model Conversation {
   id        String    @id @default(cuid())
+  userId    String?   /// Clerk user ID - null for anonymous/demo conversations
+  topic     String?
+  metadata  Json?
+  active    Boolean   @default(true)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  branches  Branch[]
   
+  branches  Branch[]
+  clusters  Cluster[]
+  messages  Message[]
+
+  @@index([active])
+  @@index([userId])
   @@map("conversations")
 }
 
-model Branch {
+/// Semantic cluster - groups related branches by domain/topic area
+/// Patent Claims 2, 3, 7, 17: Advisory cluster index with health status
+model Cluster {
   id             String       @id @default(cuid())
   conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id])
-  parentId       String?
-  parent         Branch?      @relation("BranchTree", fields: [parentId], references: [id])
-  children       Branch[]     @relation("BranchTree")
-  summary        String?
-  centroid       Float[]
-  messages       Message[]
-  facts          Fact[]
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  name           String       /// Auto-generated cluster name
+  description    String?
+  centroid       Float[]      /// Cluster centroid for similarity matching
+  
+  /// Health status: 'healthy' | 'stale' | 'rebuilding'
+  /// When stale, deterministic fallback applies (Patent Claim 17)
+  health         String       @default("healthy")
+  staleness      String       @default("fresh")
+  capacity       Int          @default(100)
+  currentLoad    Int          @default(0)
+  
+  metadata       Json?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  
+  memberships    ClusterMembership[]
+
+  @@index([conversationId])
+  @@index([health])
+  @@index([staleness])
+  @@map("clusters")
+}
+
+/// Many-to-many: Branch <-> Cluster membership
+/// Supports branches moving between clusters over time
+model ClusterMembership {
+  id        String    @id @default(cuid())
+  branchId  String
+  branch    Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  clusterId String
+  cluster   Cluster   @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  
+  active    Boolean   @default(true)
+  joinedAt  DateTime  @default(now())
+  leftAt    DateTime?
+  reason    String?   /// Why branch joined/left cluster
+  metadata  Json?
+  
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([branchId, clusterId])
+  @@index([branchId, active])
+  @@index([clusterId, active])
+  @@map("cluster_memberships")
+}
+
+/// Branch - a conversation thread/lane
+/// Patent Claims 1-6: Branch creation with preserved ancestry
+model Branch {
+  id               String       @id @default(cuid())
+  conversationId   String
+  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  /// Parent branch (structural ancestry - immutable)
+  parentId         String?
+  parent           Branch?      @relation("BranchTree", fields: [parentId], references: [id])
+  children         Branch[]     @relation("BranchTree")
+  branchDepth      Int          @default(0)
+  
+  /// Branch metadata
+  summary          String?      /// Auto-generated topic summary
+  status           String       @default("active")
+  driftType        String?      /// 'semantic' | 'functional' | 'dual_axis'
+  
+  /// Embedding data
+  centroid         Float[]      /// Branch centroid for similarity matching
+  
+  /// FPoD/XPoD - Semantic overlay realignment (Patent Claims 1, 4, 20, 25)
+  fpodMessageId    String?      /// First Point of Divergence
+  xpodMessageId    String?      /// Exit Point of Divergence (reconvergence)
+  
+  /// Drift scores for this branch
+  semanticDriftScore   Float?
+  functionalDriftScore Float?
+  driftMetadata        Json?
+  
+  metadata         Json?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  
+  messages         Message[]
+  facts            Fact[]
+  clusterMemberships ClusterMembership[]
+  
+  /// Tail routes - non-structural (Patent Claims 5, 8, 16)
+  tailRoutesFrom   TailRoute[]  @relation("TailRouteSource")
+  tailRoutesTo     TailRoute[]  @relation("TailRouteTarget")
+  
+  /// Merge edges - structural (Patent Claims 8, 16)
+  mergeEdgesFrom   MergeEdge[]  @relation("MergeEdgeSource")
+  mergeEdgesTo     MergeEdge[]  @relation("MergeEdgeTarget")
 
   @@index([conversationId])
   @@index([parentId])
+  @@index([status])
   @@map("branches")
 }
 
+/// Message in a branch
 model Message {
   id        String   @id @default(cuid())
   branchId  String
-  branch    Branch   @relation(fields: [branchId], references: [id])
-  role      String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  role      String   /// 'user' | 'assistant'
   content   String
-  embedding Float[]
+  embedding Float[]  /// Message embedding for similarity
   
-  // Drift routing decision
-  driftAction String?  // 'STAY' | 'BRANCH' | 'ROUTE'
-  driftReason String?  // Reason for the routing decision
+  /// Drift routing decision
+  driftAction   String?  /// 'STAY' | 'BRANCH' | 'ROUTE'
+  driftReason   String?  /// Reason for the routing decision
+  driftMetadata Json?    /// Full drift analysis: similarity scores, boosts, NLP signals
   
+  /// Preprocessed versions for drift detection
+  preprocessedContent   String?
+  preprocessedEmbedding Float[]
+  
+  /// Drift scores at time of message
+  semanticDrift    Float?
+  functionalDrift  Float?
+  
+  metadata  Json?
   createdAt DateTime @default(now())
+  
+  /// Anchor for tail routes and merge edges
+  tailRoutes TailRoute[]
+  mergeEdges MergeEdge[]
 
   @@index([branchId])
+  @@index([conversationId])
+  @@index([createdAt])
   @@map("messages")
 }
 
+/// Extracted facts from conversation
+/// Provenance preserved via messageIds array - facts can be reinforced by multiple messages
 model Fact {
   id         String   @id @default(cuid())
   branchId   String
-  branch     Branch   @relation(fields: [branchId], references: [id])
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  
   key        String
   value      String
   confidence Float
-  messageId  String?
+  messageIds String[] /// Array of source message IDs for provenance
+  
   createdAt  DateTime @default(now())
 
   @@index([branchId])
+  @@index([key])
   @@map("facts")
+}
+
+// ============================================================================
+// Routing Models (Patent Claims 5, 8, 16)
+// ============================================================================
+
+/// Non-structural tail route - soft affinity between branches
+/// Can be promoted to MergeEdge when stability criteria met
+model TailRoute {
+  id              String   @id @default(cuid())
+  
+  /// Source branch
+  branchId        String
+  branch          Branch   @relation("TailRouteSource", fields: [branchId], references: [id], onDelete: Cascade)
+  
+  /// Target branch
+  targetId        String
+  target          Branch   @relation("TailRouteTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  
+  /// Anchor message (for idempotency)
+  anchorMessageId String
+  anchorMessage   Message  @relation(fields: [anchorMessageId], references: [id])
+  
+  /// Route metadata
+  confidence      Float
+  reason          String   /// Reason code for route creation
+  status          String   @default("active") /// 'active' | 'superseded' | 'promoted'
+  
+  /// Promotion tracking (Patent Claim 16)
+  confirmations   Int      @default(0)  /// Grace confirmations
+  lastSeenAt      DateTime?
+  promotedAt      DateTime?
+  
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([branchId, targetId, anchorMessageId]) /// Idempotency key
+  @@index([branchId])
+  @@index([targetId])
+  @@index([status])
+  @@map("tail_routes")
+}
+
+/// Structural merge edge - promoted from TailRoute
+/// Created when persistent alignment detected (Patent Claim 8)
+model MergeEdge {
+  id              String   @id @default(cuid())
+  
+  /// Source branch
+  branchId        String
+  branch          Branch   @relation("MergeEdgeSource", fields: [branchId], references: [id], onDelete: Cascade)
+  
+  /// Target branch
+  targetId        String
+  target          Branch   @relation("MergeEdgeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  
+  /// Anchor message
+  anchorMessageId String?
+  anchorMessage   Message? @relation(fields: [anchorMessageId], references: [id])
+  
+  /// Merge metadata
+  reason          String
+  mergedAt        DateTime @default(now())
+  metadata        Json?
+  
+  createdAt       DateTime @default(now())
+
+  @@index([branchId])
+  @@index([targetId])
+  @@map("merge_edges")
+}
+
+// ============================================================================
+// Observability (Patent Claim 19)
+// ============================================================================
+
+/// Drift detection logs for auditability
+model DriftLog {
+  id                String   @id @default(cuid())
+  messageId         String
+  conversationId    String
+  
+  semanticDrift     Float
+  functionalDrift   Float
+  
+  action            String   /// 'STAY' | 'BRANCH_SAME_CLUSTER' | 'BRANCH_NEW_CLUSTER' | 'ROUTE'
+  branchTriggered   Boolean  @default(false)
+  
+  reasonCodes       String[]
+  metadata          Json?
+  
+  createdAt         DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([messageId])
+  @@index([createdAt])
+  @@map("drift_logs")
 }

@@ -51,6 +51,10 @@ const envSchema = Type.Object({
   GROQ_API_KEY: Type.String({ default: '' }),
   OPENAI_API_KEY: Type.String({ default: '' }),
   ANTHROPIC_API_KEY: Type.String({ default: '' }),
+
+  // Clerk Authentication
+  CLERK_SECRET_KEY: Type.String({ default: '' }),
+  CLERK_PUBLISHABLE_KEY: Type.String({ default: '' }),
 });
 
 export type Env = Static<typeof envSchema>;
