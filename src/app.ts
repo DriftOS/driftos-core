@@ -8,6 +8,7 @@ import corsPlugin from './plugins/cors.js';
 import prismaPlugin from './plugins/prisma.js';
 import metricsPlugin from './plugins/metrics.js';
 import swaggerPlugin from './plugins/swagger.js';
+import authPlugin from './plugins/auth.js';
 
 // Import routes
 import rootRoutes from './routes/root.js';
@@ -20,12 +21,15 @@ import conversationsRoutes from './routes/conversations/index';
 
 export async function buildApp() {
   const app = Fastify({
-    logger: logger as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    loggerInstance: logger as any,
     trustProxy: true,
     requestIdHeader: 'x-request-id',
     requestIdLogLabel: 'requestId',
     disableRequestLogging: true, // Disable verbose request/response logging
-    maxParamLength: 200,
+    routerOptions: {
+      maxParamLength: 200,
+    },
   }).withTypeProvider<TypeBoxTypeProvider>();
 
   // Register plugins
@@ -34,6 +38,7 @@ export async function buildApp() {
   await app.register(prismaPlugin);
   await app.register(metricsPlugin);
   await app.register(swaggerPlugin);
+  await app.register(authPlugin);
 
   const sensiblePlugin = await import('@fastify/sensible');
   await app.register(sensiblePlugin.default);
@@ -43,11 +48,9 @@ export async function buildApp() {
     contentSecurityPolicy: false,
   });
 
-  const rateLimitPlugin = await import('@fastify/rate-limit');
-  await app.register(rateLimitPlugin.default, {
-    max: app.config.RATE_LIMIT_MAX,
-    timeWindow: app.config.RATE_LIMIT_TIME_WINDOW,
-  });
+  // NOTE: Rate limiting is handled by the gateway in production
+  // This service is internal-only and should only receive traffic from the gateway
+  // Keeping rate limit config in env for backwards compatibility, but not applying it
 
   await app.register(rootRoutes);
 
@@ -63,7 +66,7 @@ export async function buildApp() {
     { prefix: `${app.config.API_PREFIX}/${app.config.API_VERSION}` }
   );
 
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler(async (error: Error & { statusCode?: number }, request, reply) => {
     request.log.error({ err: error });
     const statusCode = error.statusCode || 500;
     return reply.status(statusCode).send({
@@ -90,7 +93,7 @@ export async function buildApp() {
     });
   });
 
-  app.addHook('onClose', async () => {
+  app.addHook('onClose', () => {
     logger.info('Server is shutting down...');
   });
 
