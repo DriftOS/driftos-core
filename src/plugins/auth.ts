@@ -4,8 +4,8 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 
 // Routes that don't require authentication
 const PUBLIC_ROUTES = [
-  '/api/v1/llm/demo/stream', // Demo endpoint - rate limited by IP
-  '/api/v1/llm/demo/chat', // Demo chat with drift - rate limited by IP
+  '/api/v1/demo/stream', // Demo streaming endpoint - rate limited by IP
+  '/api/v1/demo/chat', // Demo chat with drift - rate limited by IP
   '/api/v1/health', // Health checks for infrastructure
   '/health', // Root health check
   '/', // Root route
