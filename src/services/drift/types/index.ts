@@ -23,6 +23,8 @@ export interface DriftInput {
   role?: 'user' | 'assistant';
   currentBranchId?: string;
   policy?: Partial<DriftPolicy>;
+  userId?: string; // Clerk user ID for authenticated users
+  clientIp?: string; // For demo user isolation
 }
 
 /**
@@ -44,6 +46,8 @@ export interface DriftContext extends OperationContext {
   role: 'user' | 'assistant';
   currentBranchId?: string;
   policy: DriftPolicy;
+  userId?: string; // Clerk user ID for authenticated users
+  clientIp?: string; // For demo user isolation
 
   reasonCodes: string[];
   currentBranch?: Branch;

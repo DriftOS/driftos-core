@@ -4,7 +4,7 @@ import { prisma } from '@plugins/prisma';
 /**
  * ValidateInput Operation
  *
- * Validates required input fields, ensures conversation exists.
+ * Validates required input fields, ensures conversation exists with userId.
  */
 export async function validateInput(ctx: DriftContext): Promise<DriftContext> {
   if (!ctx.conversationId?.trim()) {
@@ -19,11 +19,14 @@ export async function validateInput(ctx: DriftContext): Promise<DriftContext> {
     throw new Error('role must be "user" or "assistant"');
   }
 
-  // Ensure conversation exists
+  // Ensure conversation exists with userId for user isolation
   await prisma.conversation.upsert({
     where: { id: ctx.conversationId },
     update: {},
-    create: { id: ctx.conversationId },
+    create: {
+      id: ctx.conversationId,
+      userId: ctx.userId ?? null, // NULL for demo users
+    },
   });
 
   ctx.reasonCodes.push('input_valid');

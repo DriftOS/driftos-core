@@ -17,7 +17,7 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         description: 'List conversations filtered by ID prefix (for device-based access)',
         tags: ['Conversations'],
         querystring: Type.Object({
-          prefix: Type.String({ description: 'Conversation ID prefix to filter by' }),
+          prefix: Type.Optional(Type.String({ description: 'Conversation ID prefix to filter by' })),
           limit: Type.Optional(Type.Number({ default: 50, maximum: 100 })),
         }),
         response: {
@@ -40,10 +40,11 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     async (request, reply) => {
       const { prefix, limit = 50 } = request.query;
 
-      // Find conversations with matching prefix
+      // Find conversations filtered by userId and optional prefix
       const conversations = await fastify.prisma.conversation.findMany({
         where: {
-          id: { startsWith: prefix },
+          userId: request.userId ?? null, // Filter by authenticated user
+          id: prefix ? { startsWith: prefix } : undefined,
         },
         include: {
           _count: { select: { branches: true } },
@@ -104,6 +105,10 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
               updatedAt: Type.String(),
             }),
           }),
+          403: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({ message: Type.String() }),
+          }),
           404: Type.Object({
             success: Type.Literal(false),
             error: Type.Object({ message: Type.String() }),
@@ -129,6 +134,14 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         return reply.status(404).send({
           success: false,
           error: { message: 'Conversation not found' },
+        });
+      }
+
+      // Check ownership
+      if (conversation.userId !== (request.userId ?? null)) {
+        return reply.status(403).send({
+          success: false,
+          error: { message: 'Access denied to this conversation' },
         });
       }
 
@@ -193,6 +206,10 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
               ),
             }),
           }),
+          403: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({ message: Type.String() }),
+          }),
           404: Type.Object({
             success: Type.Literal(false),
             error: Type.Object({ message: Type.String() }),
@@ -223,6 +240,14 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         return reply.status(404).send({
           success: false,
           error: { message: 'Conversation not found' },
+        });
+      }
+
+      // Check ownership
+      if (conversation.userId !== (request.userId ?? null)) {
+        return reply.status(403).send({
+          success: false,
+          error: { message: 'Access denied to this conversation' },
         });
       }
 
@@ -297,11 +322,40 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
               })
             ),
           }),
+          403: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({ message: Type.String() }),
+          }),
+          404: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({ message: Type.String() }),
+          }),
         },
       },
     },
     async (request, reply) => {
       const { conversationId } = request.params;
+
+      // Verify conversation exists and belongs to user
+      const conversation = await fastify.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { userId: true },
+      });
+
+      if (!conversation) {
+        return reply.status(404).send({
+          success: false,
+          error: { message: 'Conversation not found' },
+        });
+      }
+
+      // Check ownership
+      if (conversation.userId !== (request.userId ?? null)) {
+        return reply.status(403).send({
+          success: false,
+          error: { message: 'Access denied to this conversation' },
+        });
+      }
 
       const branches = await fastify.prisma.branch.findMany({
         where: { conversationId },

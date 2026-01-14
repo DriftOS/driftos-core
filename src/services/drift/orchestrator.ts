@@ -29,6 +29,8 @@ export class DriftOrchestrator extends BaseOrchestrator<DriftContext, DriftResul
       role: input.role ?? 'user',
       currentBranchId: input.currentBranchId,
       policy: { ...DEFAULT_POLICY, ...input.policy },
+      userId: input.userId,
+      clientIp: input.clientIp,
       requestId: Math.random().toString(36).substr(2, 9),
       startTime: Date.now(),
       perfTracker: new DefaultPerformanceTracker(),

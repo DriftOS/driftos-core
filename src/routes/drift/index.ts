@@ -49,6 +49,8 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       const result = await driftService.route(conversationId, content, {
         role,
         currentBranchId,
+        userId: request.userId,
+        clientIp: request.ip,
       });
 
       if (!result.success) {
@@ -94,6 +96,29 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       const { conversationId } = request.params;
+
+      // Verify conversation exists and belongs to user
+      const conversation = await fastify.prisma.conversation.findUnique({
+        where: {
+          id: conversationId,
+        },
+        select: { userId: true },
+      });
+
+      if (!conversation) {
+        return reply.status(404).send({
+          success: false,
+          error: { message: 'Conversation not found' },
+        });
+      }
+
+      // Check ownership
+      if (conversation.userId !== (request.userId ?? null)) {
+        return reply.status(403).send({
+          success: false,
+          error: { message: 'Access denied to this conversation' },
+        });
+      }
 
       const branches = await fastify.prisma.branch.findMany({
         where: { conversationId },
