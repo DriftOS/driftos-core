@@ -192,8 +192,8 @@ GROQ_API_KEY=your-groq-api-key
 LLM_MODEL=llama-3.1-8b-instant
 LLM_TIMEOUT=5000
 
-# Optional
-PORT=3000
+# Optional (local development - gateway uses 3000, core uses 3001)
+PORT=3001
 ```
 
 ## How It Works

@@ -29,9 +29,17 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
               messageId: Type.String(),
               previousBranchId: Type.Optional(Type.String()),
               isNewBranch: Type.Boolean(),
+              isNewCluster: Type.Boolean(),
               reason: Type.String(),
               branchTopic: Type.Optional(Type.String()),
               confidence: Type.Number(),
+              similarity: Type.Number(),
+              driftAction: Type.Union([
+                Type.Literal('STAY'),
+                Type.Literal('BRANCH_SAME_CLUSTER'),
+                Type.Literal('BRANCH_NEW_CLUSTER'),
+              ]),
+              metadata: Type.Optional(Type.Any()),
             }),
           }),
           400: Type.Object({
@@ -46,11 +54,17 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     async (request, reply) => {
       const { conversationId, content, role, currentBranchId } = request.body;
 
+      // Get optional routing model override from headers
+      const routingModel = request.headers['x-routing-model'] as string | undefined;
+      const routingProvider = request.headers['x-routing-provider'] as 'groq' | 'openai' | 'anthropic' | undefined;
+
       const result = await driftService.route(conversationId, content, {
         role,
         currentBranchId,
         userId: request.userId,
         clientIp: request.ip,
+        routingModel,
+        routingProvider,
       });
 
       if (!result.success) {

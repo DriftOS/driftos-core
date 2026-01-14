@@ -96,7 +96,7 @@ up: docker-up
 	@echo "   • API:         http://localhost:$${PORT:-3000}"
 	@echo "   • Swagger:     http://localhost:$${PORT:-3000}/documentation"
 	@echo "   • Prometheus:  http://localhost:$${PROMETHEUS_PORT:-9091}"
-	@echo "   • Grafana:     http://localhost:$${GRAFANA_PORT:-3002} (admin/admin)"
+	@echo "   • Grafana:     http://localhost:$${GRAFANA_PORT:-3010} (admin/admin)"
 	@echo ""
 	@echo "🚀 Start the dev server in another terminal:"
 	@echo "   make dev"
@@ -108,7 +108,7 @@ up: docker-up
 # Open Grafana in browser
 grafana:
 	@echo "🎨 Opening Grafana..."
-	@open http://localhost:$${GRAFANA_PORT:-3002} || xdg-open http://localhost:$${GRAFANA_PORT:-3002} || echo "Open http://localhost:$${GRAFANA_PORT:-3002} in your browser"
+	@open http://localhost:$${GRAFANA_PORT:-3010} || xdg-open http://localhost:$${GRAFANA_PORT:-3010} || echo "Open http://localhost:$${GRAFANA_PORT:-3010} in your browser"
 
 # Test the API with authentication
 test-api:

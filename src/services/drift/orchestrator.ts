@@ -31,6 +31,8 @@ export class DriftOrchestrator extends BaseOrchestrator<DriftContext, DriftResul
       policy: { ...DEFAULT_POLICY, ...input.policy },
       userId: input.userId,
       clientIp: input.clientIp,
+      routingModel: input.routingModel,
+      routingProvider: input.routingProvider,
       requestId: Math.random().toString(36).substr(2, 9),
       startTime: Date.now(),
       perfTracker: new DefaultPerformanceTracker(),
@@ -58,15 +60,44 @@ export class DriftOrchestrator extends BaseOrchestrator<DriftContext, DriftResul
       throw new Error('Pipeline incomplete: missing branch or message');
     }
 
+    // Build LLM analysis metadata if available
+    const llmAnalysis = ctx.llmResponse
+      ? {
+          action: ctx.llmResponse.action,
+          targetBranchId: ctx.llmResponse.targetBranchId ?? undefined,
+          newBranchTopic: ctx.llmResponse.newBranchTopic ?? undefined,
+          reason: ctx.llmResponse.reason,
+          confidence: ctx.llmResponse.confidence,
+          currentBranch: ctx.currentBranch
+            ? {
+                id: ctx.currentBranch.id,
+                summary: ctx.currentBranch.summary ?? 'Unknown',
+              }
+            : undefined,
+          otherBranches: ctx.branches
+            ?.filter((b) => !b.isCurrentBranch)
+            .map((b) => ({
+              id: b.id,
+              summary: b.summary,
+            })),
+        }
+      : undefined;
+
     return {
       action: ctx.classification?.action ?? 'STAY',
       branchId: ctx.branch.id,
       messageId: ctx.message.id,
       previousBranchId: ctx.currentBranch?.id !== ctx.branch.id ? ctx.currentBranchId : undefined,
       isNewBranch: ctx.classification?.action === 'BRANCH',
+      isNewCluster: false, // LLM-based routing doesn't have cluster concept
       reason: ctx.classification?.reason ?? 'unknown',
       reasonCodes: ctx.reasonCodes,
-      metadata: ctx.metadata,
+      driftAction: 'STAY', // LLM-based routing doesn't distinguish cluster types
+      similarity: 0, // LLM-based routing doesn't use embedding similarity
+      metadata: {
+        ...ctx.metadata,
+        llmAnalysis,
+      },
       branchTopic: ctx.branch.summary ?? 'Unknown',
       confidence: ctx.classification?.confidence ?? 0,
     };

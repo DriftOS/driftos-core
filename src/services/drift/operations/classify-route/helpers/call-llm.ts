@@ -1,4 +1,5 @@
 import { getConfig } from '@/plugins/env';
+import { getModelConfig, getApiKey, getResponseFormat } from '@/config/llm-models';
 
 const ROUTE_SCHEMA = {
   type: 'json_schema',
@@ -18,19 +19,6 @@ const ROUTE_SCHEMA = {
   },
 };
 
-const MODELS_WITH_JSON_SCHEMA: Record<string, string[]> = {
-  groq: [
-    'llama-3.3-70b-versatile',
-    'llama-3.3-70b-specdec',
-    'llama3-70b-8192',
-    'llama3-8b-8192',
-    'mixtral-8x7b-32768',
-    'gemma2-9b-it',
-  ],
-  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'],
-  anthropic: [], // Anthropic uses tool_use for structured output, not json_schema
-};
-
 const JSON_INSTRUCTION = `
 
 IMPORTANT: You MUST respond with ONLY a valid JSON object in this exact format:
@@ -38,51 +26,46 @@ IMPORTANT: You MUST respond with ONLY a valid JSON object in this exact format:
 
 Do not include any other text, explanation, or markdown. Just the raw JSON object.`;
 
-function getProviderConfig(config: ReturnType<typeof getConfig>) {
-  const provider = config.LLM_PROVIDER?.toLowerCase() || 'groq';
-  const model = config.LLM_MODEL;
+function getProviderConfig(
+  config: ReturnType<typeof getConfig>,
+  modelOverride?: string,
+  providerOverride?: string
+) {
+  // Use override if provided, otherwise use env config
+  const modelId = modelOverride || config.DRIFT_ROUTING_MODEL;
+  const modelConfig = getModelConfig(modelId);
+  const apiKey = getApiKey(modelConfig.provider, config);
 
-  // Determine API key and endpoint based on provider
-  let apiKey: string;
-  let endpoint: string;
-  let supportsJsonSchema: boolean;
-
-  switch (provider) {
-    case 'openai':
-      apiKey = config.OPENAI_API_KEY || config.LLM_API_KEY;
-      endpoint = 'https://api.openai.com/v1/chat/completions';
-      supportsJsonSchema = (MODELS_WITH_JSON_SCHEMA.openai || []).some((m) => model.includes(m));
-      break;
-    case 'anthropic':
-      apiKey = config.ANTHROPIC_API_KEY || config.LLM_API_KEY;
-      endpoint = 'https://api.anthropic.com/v1/messages';
-      supportsJsonSchema = false; // Anthropic doesn't use json_schema format
-      break;
-    case 'groq':
-    default:
-      apiKey = config.GROQ_API_KEY || config.LLM_API_KEY;
-      endpoint = 'https://api.groq.com/openai/v1/chat/completions';
-      supportsJsonSchema = (MODELS_WITH_JSON_SCHEMA.groq || []).some((m) => model.includes(m));
-      break;
-  }
-
-  return { provider, apiKey, endpoint, supportsJsonSchema, model };
+  return {
+    provider: modelConfig.provider,
+    apiKey,
+    endpoint: modelConfig.baseUrl,
+    supportsJsonSchema: modelConfig.supportsJsonSchema,
+    supportsTemperature: modelConfig.supportsTemperature ?? true,
+    defaultTemperature: modelConfig.defaultTemperature,
+    model: modelId,
+  };
 }
 
 async function callOpenAICompatible(
   prompt: string,
   providerConfig: ReturnType<typeof getProviderConfig>
 ): Promise<string> {
-  const { apiKey, endpoint, supportsJsonSchema, model } = providerConfig;
+  const { apiKey, endpoint, supportsJsonSchema, supportsTemperature, defaultTemperature, model } =
+    providerConfig;
 
   const finalPrompt = supportsJsonSchema ? prompt : prompt + JSON_INSTRUCTION;
 
   const body: Record<string, unknown> = {
     model,
     messages: [{ role: 'user', content: finalPrompt }],
-    temperature: 0.1,
     max_tokens: 200,
   };
+
+  // Only add temperature if model supports it
+  if (supportsTemperature) {
+    body.temperature = defaultTemperature ?? 0.1;
+  }
 
   if (supportsJsonSchema) {
     body.response_format = ROUTE_SCHEMA;
@@ -139,9 +122,11 @@ async function callAnthropic(
 
 export async function callLLM(
   prompt: string,
-  config: ReturnType<typeof getConfig>
+  config: ReturnType<typeof getConfig>,
+  modelOverride?: string,
+  providerOverride?: string
 ): Promise<string> {
-  const providerConfig = getProviderConfig(config);
+  const providerConfig = getProviderConfig(config, modelOverride, providerOverride);
 
   if (providerConfig.provider === 'anthropic') {
     return callAnthropic(prompt, providerConfig);

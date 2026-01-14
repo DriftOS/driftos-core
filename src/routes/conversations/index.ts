@@ -4,11 +4,69 @@ import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
 /**
  * Conversations Routes
  *
- * GET  /conversations              - List conversations by prefix
- * GET  /conversations/:id          - Get conversation summary
- * GET  /conversations/:id/branches - List all branches
+ * POST   /conversations              - Create new conversation
+ * GET    /conversations              - List conversations by prefix
+ * GET    /conversations/:id          - Get conversation summary
+ * GET    /conversations/:id/branches - List all branches
+ * DELETE /conversations              - Delete all conversations for user
+ * DELETE /conversations/:id          - Delete conversation
  */
 const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
+  // Create new conversation for authenticated user
+  fastify.post(
+    '/',
+    {
+      schema: {
+        description: 'Create a new conversation for the authenticated user',
+        tags: ['Conversations'],
+        body: Type.Object({
+          topic: Type.Optional(Type.String({ default: 'New Chat' })),
+        }),
+        response: {
+          201: Type.Object({
+            success: Type.Literal(true),
+            data: Type.Object({
+              id: Type.String(),
+              topic: Type.String(),
+              createdAt: Type.String(),
+              updatedAt: Type.String(),
+            }),
+          }),
+          401: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({ message: Type.String() }),
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = request.userId;
+
+      if (!userId) {
+        return reply.status(401).send({
+          success: false,
+          error: { message: 'Unauthorized - user ID not found' },
+        });
+      }
+
+      const { topic = 'New Chat' } = request.body;
+
+      const conversation = await fastify.prisma.conversation.create({
+        data: { userId },
+      });
+
+      return reply.status(201).send({
+        success: true,
+        data: {
+          id: conversation.id,
+          topic,
+          createdAt: conversation.createdAt.toISOString(),
+          updatedAt: conversation.updatedAt.toISOString(),
+        },
+      });
+    }
+  );
+
   // List conversations by prefix (for device-based filtering)
   fastify.get(
     '/',
@@ -19,6 +77,7 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         querystring: Type.Object({
           prefix: Type.Optional(Type.String({ description: 'Conversation ID prefix to filter by' })),
           limit: Type.Optional(Type.Number({ default: 50, maximum: 100 })),
+          offset: Type.Optional(Type.Number({ default: 0, minimum: 0 })),
         }),
         response: {
           200: Type.Object({
@@ -38,7 +97,7 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { prefix, limit = 50 } = request.query;
+      const { prefix, limit = 50, offset = 0 } = request.query;
 
       // Find conversations filtered by userId and optional prefix
       const conversations = await fastify.prisma.conversation.findMany({
@@ -60,6 +119,7 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           },
         },
         orderBy: { updatedAt: 'desc' },
+        skip: offset,
         take: limit,
       });
 
@@ -375,6 +435,129 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           createdAt: b.createdAt.toISOString(),
           updatedAt: b.updatedAt.toISOString(),
         })),
+      });
+    }
+  );
+
+  // Delete all conversations for user
+  fastify.delete(
+    '/',
+    {
+      schema: {
+        description: 'Delete all conversations for the authenticated user',
+        tags: ['Conversations'],
+        querystring: Type.Object({
+          prefix: Type.Optional(Type.String({ description: 'Only delete conversations with this ID prefix' })),
+        }),
+        response: {
+          200: Type.Object({
+            success: Type.Literal(true),
+            data: Type.Object({
+              deletedCount: Type.Number(),
+              deletedAt: Type.String(),
+            }),
+          }),
+          401: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({ message: Type.String() }),
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = request.userId;
+
+      if (!userId) {
+        return reply.status(401).send({
+          success: false,
+          error: { message: 'Unauthorized - user ID not found' },
+        });
+      }
+
+      const { prefix } = request.query;
+
+      // Delete all conversations for this user (with optional prefix filter)
+      const result = await fastify.prisma.conversation.deleteMany({
+        where: {
+          userId,
+          id: prefix ? { startsWith: prefix } : undefined,
+        },
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          deletedCount: result.count,
+          deletedAt: new Date().toISOString(),
+        },
+      });
+    }
+  );
+
+  // Delete a conversation
+  fastify.delete(
+    '/:conversationId',
+    {
+      schema: {
+        description: 'Delete a conversation and all its branches and messages',
+        tags: ['Conversations'],
+        params: Type.Object({
+          conversationId: Type.String(),
+        }),
+        response: {
+          200: Type.Object({
+            success: Type.Literal(true),
+            data: Type.Object({
+              id: Type.String(),
+              deletedAt: Type.String(),
+            }),
+          }),
+          403: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({ message: Type.String() }),
+          }),
+          404: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({ message: Type.String() }),
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const { conversationId } = request.params;
+
+      // Verify conversation exists and belongs to user
+      const conversation = await fastify.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { userId: true },
+      });
+
+      if (!conversation) {
+        return reply.status(404).send({
+          success: false,
+          error: { message: 'Conversation not found' },
+        });
+      }
+
+      // Check ownership
+      if (conversation.userId !== (request.userId ?? null)) {
+        return reply.status(403).send({
+          success: false,
+          error: { message: 'Access denied to this conversation' },
+        });
+      }
+
+      // Delete the conversation (cascading deletes will handle branches and messages)
+      await fastify.prisma.conversation.delete({
+        where: { id: conversationId },
+      });
+
+      return reply.send({
+        success: true,
+        data: {
+          id: conversationId,
+          deletedAt: new Date().toISOString(),
+        },
       });
     }
   );

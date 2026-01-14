@@ -26,10 +26,10 @@ npm run dev
 ```
 
 **That's it!** Your API is now running at:
-- **API**: http://localhost:3000/api/v1
-- **Swagger**: http://localhost:3000/documentation
-- **Metrics**: http://localhost:3000/metrics
-- **Grafana**: http://localhost:3002 (admin/admin)
+- **API**: http://localhost:3001/api/v1 (or via gateway at http://localhost:3000/api/v1/llm)
+- **Swagger**: http://localhost:3001/documentation
+- **Metrics**: http://localhost:3001/metrics
+- **Grafana**: http://localhost:3010 (admin/admin)
 
 ---
 
@@ -305,18 +305,18 @@ This tests:
 
 **Using Swagger UI:**
 ```
-http://localhost:3000/documentation
+http://localhost:3001/documentation
 ```
 
 **Using cURL:**
 ```bash
 # Login
-curl -X POST http://localhost:3000/api/v1/auth/login \
+curl -X POST http://localhost:3001/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"password123"}'
 
 # Create Todo (with token)
-curl -X POST http://localhost:3000/api/v1/todos \
+curl -X POST http://localhost:3001/api/v1/todos \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"title":"Test","description":"Test todo","userId":"user-123"}'

@@ -18,7 +18,7 @@ export interface ExtractedFact {
   key: string;
   value: string;
   confidence: number;
-  messageId?: string;
+  messageId?: string | null;
 }
 
 export interface FactsContext extends OperationContext {

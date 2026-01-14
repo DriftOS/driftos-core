@@ -27,10 +27,17 @@ export async function classifyRoute(ctx: DriftContext): Promise<DriftContext> {
 
   // Build prompt for user messages
   const prompt = buildPrompt(ctx.content, currentBranch, otherBranches);
-  // Call LLM
-  const response = await callLLM(prompt, config);
+  // Call LLM with optional model override from context
+  const response = await callLLM(prompt, config, ctx.routingModel, ctx.routingProvider);
 
   const classification = parseResponse(response, currentBranch?.id);
+
+  // Store raw LLM response for analysis display
+  try {
+    ctx.llmResponse = JSON.parse(response);
+  } catch {
+    // If parsing fails, response will not be available for analysis
+  }
 
   // Safety check: First message MUST be BRANCH regardless of LLM response
   if (!currentBranch && otherBranches.length === 0 && classification.action !== 'BRANCH') {
