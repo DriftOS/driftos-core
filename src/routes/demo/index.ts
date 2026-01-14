@@ -308,12 +308,11 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         }));
 
       try {
-        // Step 1: Create a temporary demo conversation
+        // Step 1: Create a temporary demo conversation (no userId for demo)
         const demoConversationId = `demo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const conversation = await fastify.prisma.conversation.create({
           data: {
             id: demoConversationId,
-            userId: 'demo-user',
             topic: 'Demo Conversation',
           },
         });
