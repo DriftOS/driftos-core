@@ -1,21 +1,115 @@
-import { Type } from '@sinclair/typebox';
-import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
-import { driftService } from '@services/drift';
+import { Type } from "@sinclair/typebox";
+import type { FastifyPluginAsyncTypebox } from "@fastify/type-provider-typebox";
+import {
+  processEphemeralConversation,
+  type EphemeralState,
+} from "@services/drift/ephemeral";
 
 // Provider endpoints
 const PROVIDER_ENDPOINTS: Record<string, string> = {
-  groq: 'https://api.groq.com/openai/v1/chat/completions',
-  openai: 'https://api.openai.com/v1/chat/completions',
-  anthropic: 'https://api.anthropic.com/v1/messages',
+  groq: "https://api.groq.com/openai/v1/chat/completions",
+  openai: "https://api.openai.com/v1/chat/completions",
+  anthropic: "https://api.anthropic.com/v1/messages",
 };
 
 // Demo endpoint constants - hardcoded for security
-const DEMO_MODEL = 'llama-3.1-8b-instant';
+const DEMO_MODEL = "llama-3.1-8b-instant";
+
+// Fact extraction prompt - same as full version
+const FACT_EXTRACTION_PROMPT = `Analyze ONLY the messages below and extract key facts.
+Return a JSON object with "branchTopic" and "facts".
+
+CRITICAL: Only extract facts that are EXPLICITLY stated in the messages below. Do NOT invent or hallucinate facts.
+
+RULES:
+1. branchTopic: A concise 3-6 word topic name based ONLY on what's discussed below
+2. ONE fact per concept - consolidate multiple mentions
+3. Use snake_case keys (e.g., "destination", "budget_range", "preference")
+4. Confidence: 1.0 = explicit, 0.9 = stated once, 0.7 = implied
+5. If no clear facts are stated, return an empty facts array
+
+OUTPUT FORMAT:
+{"branchTopic": "topic name", "facts": [{"key": "destination", "value": "Paris", "confidence": 0.9}]}
+
+EXTRACT: Decisions, preferences, key entities (places, dates, amounts), constraints that are EXPLICITLY mentioned.
+DO NOT extract: Questions without answers, trivial elements, facts not explicitly stated in the messages below.`;
+
+interface ExtractedFact {
+  key: string;
+  value: string;
+  confidence: number;
+}
+
+interface FactExtractionResult {
+  branchTopic: string;
+  facts: ExtractedFact[];
+}
+
+async function extractFactsFromBranch(
+  messages: Array<{ role: string; content: string }>,
+  apiKey: string,
+): Promise<FactExtractionResult> {
+  if (messages.length === 0) {
+    return { branchTopic: "New conversation", facts: [] };
+  }
+
+  const conversationText = messages
+    .map((m, i) => `[msg-${i + 1}] [${m.role.toUpperCase()}]: ${m.content}`)
+    .join("\n\n");
+
+  const prompt = `${FACT_EXTRACTION_PROMPT}\n\nConversation:\n${conversationText}\n\nOutput JSON:`;
+
+  try {
+    const response = await fetch(PROVIDER_ENDPOINTS.groq!, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: DEMO_MODEL,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 512,
+        temperature: 0.3,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("Fact extraction failed:", response.status);
+      return { branchTopic: "Conversation", facts: [] };
+    }
+
+    const data = (await response.json()) as {
+      choices: { message: { content: string } }[];
+    };
+    const content = data.choices[0]?.message.content ?? "{}";
+
+    let parsed: { branchTopic?: string; facts?: unknown[] };
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      return { branchTopic: "Conversation", facts: [] };
+    }
+
+    return {
+      branchTopic: parsed.branchTopic || "Conversation",
+      facts: (parsed.facts ?? []).map((f: any) => ({
+        key: String(f.key || ""),
+        value: String(f.value || ""),
+        confidence: Number(f.confidence || 0.9),
+      })),
+    };
+  } catch (err) {
+    console.error("Fact extraction error:", err);
+    return { branchTopic: "Conversation", facts: [] };
+  }
+}
 const DEMO_MAX_TOKENS = 256;
 const DEMO_MAX_SYSTEM_PROMPT_LENGTH = 500;
 const DEMO_MAX_MESSAGES = 20;
 const DEMO_MAX_MESSAGE_LENGTH = 2000; // per message content limit
-const DEMO_ALLOWED_ROLES = ['user', 'assistant']; // prevent system role injection
+const DEMO_ALLOWED_ROLES = ["user", "assistant"]; // prevent system role injection
 
 // Simple in-memory rate limiter for demo endpoint
 const demoRateLimiter = new Map<string, { count: number; resetAt: number }>();
@@ -23,7 +117,7 @@ const demoRateLimiter = new Map<string, { count: number; resetAt: number }>();
 function checkDemoRateLimit(
   ip: string,
   limit: number,
-  window: number
+  window: number,
 ): { allowed: boolean; remaining: number; resetIn: number } {
   const now = Date.now();
   const record = demoRateLimiter.get(ip);
@@ -55,23 +149,22 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
-// eslint-disable-next-line @typescript-eslint/require-await
 const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
   // Demo endpoint - uses server-side Groq API key
   // Rate limited, fixed model, no user API key required
   fastify.post(
-    '/stream',
+    "/stream",
     {
       schema: {
         description:
-          'Demo streaming endpoint using server-side Groq API key. Rate limited to 10 requests/minute per IP. Fixed to llama-3.1-8b-instant model.',
-        tags: ['LLM'],
+          "Demo streaming endpoint using server-side Groq API key. Rate limited to 10 requests/minute per IP. Fixed to llama-3.1-8b-instant model.",
+        tags: ["LLM"],
         body: Type.Object({
           messages: Type.Array(
             Type.Object({
               role: Type.String(),
               content: Type.String(),
-            })
+            }),
           ),
           system: Type.Optional(Type.String()),
         }),
@@ -89,13 +182,22 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
               retryAfter: Type.Number(),
             }),
           }),
+          500: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({
+              message: Type.String(),
+            }),
+          }),
         },
       },
     },
     async (request, reply) => {
       // Get client IP for rate limiting
-      const clientIp = request.ip || request.headers['x-forwarded-for'] || 'unknown';
-      const ip = Array.isArray(clientIp) ? (clientIp[0] ?? 'unknown') : String(clientIp);
+      const clientIp =
+        request.ip || request.headers["x-forwarded-for"] || "unknown";
+      const ip = Array.isArray(clientIp)
+        ? (clientIp[0] ?? "unknown")
+        : String(clientIp);
 
       // Check rate limit using config values
       const demoLimit = fastify.config.DEMO_RATE_LIMIT;
@@ -112,17 +214,17 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       }
 
       // Add rate limit headers
-      void reply.header('X-RateLimit-Limit', demoLimit);
-      void reply.header('X-RateLimit-Remaining', rateLimit.remaining);
-      void reply.header('X-RateLimit-Reset', Math.ceil(rateLimit.resetIn / 1000));
+      reply.header("X-RateLimit-Limit", demoLimit);
+      reply.header("X-RateLimit-Remaining", rateLimit.remaining);
+      reply.header("X-RateLimit-Reset", Math.ceil(rateLimit.resetIn / 1000));
 
       // Get server-side Groq API key
       const apiKey = fastify.config.GROQ_API_KEY;
       if (!apiKey) {
-        fastify.log.error('Demo endpoint: GROQ_API_KEY not configured');
+        fastify.log.error("Demo endpoint: GROQ_API_KEY not configured");
         return reply.status(500).send({
           success: false,
-          error: { message: 'Demo service temporarily unavailable' },
+          error: { message: "Demo service temporarily unavailable" },
         });
       }
 
@@ -143,7 +245,9 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         }));
 
       // Build request body - always Groq format with fixed model
-      const allMessages = system ? [{ role: 'system', content: system }, ...messages] : messages;
+      const allMessages = system
+        ? [{ role: "system", content: system }, ...messages]
+        : messages;
 
       const body = {
         model: DEMO_MODEL,
@@ -154,15 +258,10 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       };
 
       try {
-        const groqEndpoint = PROVIDER_ENDPOINTS.groq;
-        if (!groqEndpoint) {
-          throw new Error('Groq endpoint not configured');
-        }
-
-        const response = await fetch(groqEndpoint, {
-          method: 'POST',
+        const response = await fetch(PROVIDER_ENDPOINTS.groq!, {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify(body),
@@ -170,15 +269,17 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
         if (!response.ok) {
           const errorText = await response.text();
-          fastify.log.error(`Demo LLM error: ${response.status} - ${errorText}`);
-          let errorMessage = 'Demo service error';
+          fastify.log.error(
+            `Demo LLM error: ${response.status} - ${errorText}`,
+          );
+          let errorMessage = "Demo service error";
           try {
-            const errorJson = JSON.parse(errorText) as { error?: { message?: string } };
+            const errorJson = JSON.parse(errorText);
             errorMessage = errorJson.error?.message || errorMessage;
           } catch {
             // Keep generic error message
           }
-          return reply.status(response.status).send({
+          return reply.status(response.status as 500).send({
             success: false,
             error: { message: errorMessage },
           });
@@ -186,10 +287,10 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
         // Set SSE headers
         reply.raw.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-          'Access-Control-Allow-Origin': '*',
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+          "Access-Control-Allow-Origin": "*",
         });
 
         // Pipe the response stream directly to client
@@ -197,9 +298,7 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           const reader = response.body.getReader();
 
           const pump = async (): Promise<void> => {
-            const readResult = await reader.read();
-            const done = readResult.done;
-            const value = readResult.value as Uint8Array | undefined;
+            const { done, value } = await reader.read();
             if (done) {
               reply.raw.end();
               return;
@@ -213,30 +312,30 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           reply.raw.end();
         }
       } catch (err) {
-        fastify.log.error({ err }, 'Demo LLM error');
+        fastify.log.error({ err }, "Demo LLM error");
         return reply.status(500).send({
           success: false,
-          error: { message: 'Demo service temporarily unavailable' },
+          error: { message: "Demo service temporarily unavailable" },
         });
       }
-    }
+    },
   );
 
-  // Demo chat endpoint - simplified version without full drift processing
-  // Just returns basic action/branch info, no detailed NLP metadata
+  // Demo chat endpoint - processes conversation through drift, streams LLM, returns state
+  // This is the full demo experience with branching, routing, and fact extraction
   fastify.post(
-    '/chat',
+    "/chat",
     {
       schema: {
         description:
-          'Demo chat endpoint with basic drift routing (LLM-based). Returns action, branch info, and streaming response. Rate limited to 10 requests/minute per IP. Note: This is a simplified demo without NLP metadata.',
-        tags: ['LLM'],
+          "Demo chat endpoint with full drift processing. Processes conversation history through drift routing, streams LLM response, and returns complete state (branches, facts, routing decisions). Rate limited to 10 requests/minute per IP.",
+        tags: ["LLM"],
         body: Type.Object({
           messages: Type.Array(
             Type.Object({
               role: Type.String(),
               content: Type.String(),
-            })
+            }),
           ),
           system: Type.Optional(Type.String()),
           extractFacts: Type.Optional(Type.Boolean()),
@@ -260,8 +359,11 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       // Get client IP for rate limiting
-      const clientIp = request.ip || request.headers['x-forwarded-for'] || 'unknown';
-      const ip = Array.isArray(clientIp) ? (clientIp[0] ?? 'unknown') : String(clientIp);
+      const clientIp =
+        request.ip || request.headers["x-forwarded-for"] || "unknown";
+      const ip = Array.isArray(clientIp)
+        ? (clientIp[0] ?? "unknown")
+        : String(clientIp);
 
       // Check rate limit
       const demoLimit = fastify.config.DEMO_RATE_LIMIT;
@@ -277,20 +379,20 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         });
       }
 
-      void reply.header('X-RateLimit-Limit', demoLimit);
-      void reply.header('X-RateLimit-Remaining', rateLimit.remaining);
-      void reply.header('X-RateLimit-Reset', Math.ceil(rateLimit.resetIn / 1000));
+      reply.header("X-RateLimit-Limit", demoLimit);
+      reply.header("X-RateLimit-Remaining", rateLimit.remaining);
+      reply.header("X-RateLimit-Reset", Math.ceil(rateLimit.resetIn / 1000));
 
       const apiKey = fastify.config.GROQ_API_KEY;
       if (!apiKey) {
-        fastify.log.error('Demo endpoint: GROQ_API_KEY not configured');
+        fastify.log.error("Demo endpoint: GROQ_API_KEY not configured");
         return reply.status(500).send({
           success: false,
-          error: { message: 'Demo service temporarily unavailable' },
+          error: { message: "Demo service temporarily unavailable" },
         });
       }
 
-      const { messages } = request.body;
+      const { messages, extractFacts } = request.body;
       let { system } = request.body;
 
       // Security: Limit system prompt length
@@ -303,53 +405,23 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         .filter((m) => DEMO_ALLOWED_ROLES.includes(m.role))
         .slice(-DEMO_MAX_MESSAGES)
         .map((m) => ({
-          role: m.role as 'user' | 'assistant',
+          role: m.role as "user" | "assistant",
           content: m.content.slice(0, DEMO_MAX_MESSAGE_LENGTH),
         }));
 
       try {
-        // Step 1: Create a temporary demo conversation (no userId for demo)
-        const demoConversationId = `demo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        const conversation = await fastify.prisma.conversation.create({
-          data: {
-            id: demoConversationId,
-            topic: 'Demo Conversation',
+        // Step 1: Process conversation through ephemeral drift
+        // This builds up branches, routing decisions, and extracts facts - all in memory
+        const driftState = await processEphemeralConversation(
+          sanitizedMessages,
+          {
+            extractFacts: extractFacts ?? true,
           },
-        });
+        );
 
-        // Step 2: Process messages through drift orchestrator
-        let currentBranchId: string | undefined;
-        const processedMessages: Array<{
-          id: string;
-          role: 'user' | 'assistant';
-          content: string;
-          branchId: string;
-          branchTopic: string;
-          action: string;
-        }> = [];
-
-        for (const msg of sanitizedMessages) {
-          const result = await driftService.route(conversation.id, msg.content, {
-            role: msg.role,
-            currentBranchId,
-          });
-
-          if (result.success && result.data) {
-            currentBranchId = result.data.branchId;
-            processedMessages.push({
-              id: result.data.messageId,
-              role: msg.role,
-              content: msg.content,
-              branchId: result.data.branchId,
-              branchTopic: result.data.branchTopic || 'Unknown',
-              action: result.data.action,
-            });
-          }
-        }
-
-        // Step 3: Build LLM request with conversation history
+        // Step 2: Build LLM request with conversation history
         const llmMessages = system
-          ? [{ role: 'system', content: system }, ...sanitizedMessages]
+          ? [{ role: "system", content: system }, ...sanitizedMessages]
           : sanitizedMessages;
 
         const body = {
@@ -360,15 +432,10 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           stream: true,
         };
 
-        const groqEndpoint2 = PROVIDER_ENDPOINTS.groq;
-        if (!groqEndpoint2) {
-          throw new Error('Groq endpoint not configured');
-        }
-
-        const response = await fetch(groqEndpoint2, {
-          method: 'POST',
+        const response = await fetch(PROVIDER_ENDPOINTS.groq!, {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify(body),
@@ -376,16 +443,12 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
         if (!response.ok) {
           const errorText = await response.text();
-          fastify.log.error(`Demo chat LLM error: ${response.status} - ${errorText}`);
-
-          // Cleanup demo conversation
-          await fastify.prisma.conversation
-            .delete({ where: { id: conversation.id } })
-            .catch(() => {});
-
-          let errorMessage = 'Demo service error';
+          fastify.log.error(
+            `Demo chat LLM error: ${response.status} - ${errorText}`,
+          );
+          let errorMessage = "Demo service error";
           try {
-            const errorJson = JSON.parse(errorText) as { error?: { message?: string } };
+            const errorJson = JSON.parse(errorText);
             errorMessage = errorJson.error?.message || errorMessage;
           } catch {
             // Keep generic error
@@ -396,95 +459,88 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           });
         }
 
-        // Step 4: Stream response with state at the end
+        // Step 3: Stream response with state at the end
+        // We use a custom SSE format:
+        // - Regular SSE chunks for LLM streaming
+        // - Final "data: [STATE]" event with the drift state JSON
         reply.raw.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-          'Access-Control-Allow-Origin': '*',
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+          "Access-Control-Allow-Origin": "*",
         });
 
         if (response.body) {
           const reader = response.body.getReader();
-          let assistantContent = '';
+          let assistantContent = "";
 
           const pump = async (): Promise<void> => {
-            const readResult = await reader.read();
-            const done = readResult.done;
-            const value = readResult.value as Uint8Array | undefined;
+            const { done, value } = await reader.read();
             if (done) {
-              // Stream finished - process assistant response through drift
-              if (assistantContent && currentBranchId) {
-                const assistantResult = await driftService.route(
-                  conversation.id,
-                  assistantContent,
-                  {
-                    role: 'assistant',
-                    currentBranchId,
-                  }
-                );
-
-                if (assistantResult.success && assistantResult.data) {
-                  processedMessages.push({
-                    id: assistantResult.data.messageId,
-                    role: 'assistant',
-                    content: assistantContent,
-                    branchId: assistantResult.data.branchId,
-                    branchTopic: assistantResult.data.branchTopic || 'Unknown',
-                    action: assistantResult.data.action,
-                  });
-                }
-              }
-
-              // Fetch branches from database
-              const branches = await fastify.prisma.branch.findMany({
-                where: { conversationId: conversation.id },
-                include: {
-                  _count: {
-                    select: { messages: true, facts: true },
-                  },
+              // Stream finished - now send the state
+              // Add the assistant message to the drift state
+              const updatedMessages = [
+                ...driftState.messages,
+                {
+                  id: `msg-${driftState.messages.length + 1}`,
+                  role: "assistant" as const,
+                  content: assistantContent,
+                  branchId: driftState.currentBranchId,
+                  branchTopic: driftState.currentBranchTopic,
+                  action: "STAY" as const,
+                  driftAction: "STAY" as const,
                 },
-                orderBy: { createdAt: 'asc' },
-              });
+              ];
 
-              const finalState = {
-                branches: branches.map((b) => ({
-                  id: b.id,
-                  topic: b.summary || 'Unknown',
-                  parentId: b.parentId,
-                  messageCount: b._count.messages,
-                  facts: [], // Facts would need separate query, keeping empty for demo
-                  createdAt: b.createdAt.getTime(),
-                })),
-                messages: processedMessages,
-                currentBranchId: currentBranchId || branches[0]?.id || '',
+              // Extract facts from each branch using LLM
+              const updatedBranches = await Promise.all(
+                driftState.branches.map(async (branch) => {
+                  const branchMessages = updatedMessages
+                    .filter((m) => m.branchId === branch.id)
+                    .map((m) => ({ role: m.role, content: m.content }));
+
+                  if (branchMessages.length === 0) {
+                    return branch;
+                  }
+
+                  const extraction = await extractFactsFromBranch(
+                    branchMessages,
+                    apiKey,
+                  );
+
+                  return {
+                    ...branch,
+                    topic: extraction.branchTopic || branch.topic,
+                    facts: extraction.facts.map((f) => `${f.key}: ${f.value}`),
+                  };
+                }),
+              );
+
+              const finalState: EphemeralState = {
+                ...driftState,
+                branches: updatedBranches,
+                messages: updatedMessages,
                 currentBranchTopic:
-                  branches.find((b) => b.id === currentBranchId)?.summary || 'Unknown',
+                  updatedBranches.find(
+                    (b) => b.id === driftState.currentBranchId,
+                  )?.topic || driftState.currentBranchTopic,
               };
 
               // Send state as final SSE event
-              reply.raw.write(`\n\ndata: [STATE]${JSON.stringify(finalState)}\n\n`);
+              reply.raw.write(
+                `\n\ndata: [STATE]${JSON.stringify(finalState)}\n\n`,
+              );
               reply.raw.end();
-
-              // Cleanup demo conversation in background
-              fastify.prisma.conversation
-                .delete({ where: { id: conversation.id } })
-                .catch((err: Error) =>
-                  fastify.log.error({ err }, 'Failed to cleanup demo conversation')
-                );
-
               return;
             }
 
             // Parse SSE to extract content for state tracking
-            const text = new TextDecoder().decode(value as Uint8Array);
-            const lines = text.split('\n');
+            const text = new TextDecoder().decode(value);
+            const lines = text.split("\n");
             for (const line of lines) {
-              if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+              if (line.startsWith("data: ") && !line.includes("[DONE]")) {
                 try {
-                  const json = JSON.parse(line.slice(6)) as {
-                    choices?: Array<{ delta?: { content?: string } }>;
-                  };
+                  const json = JSON.parse(line.slice(6));
                   const delta = json.choices?.[0]?.delta?.content;
                   if (delta) {
                     assistantContent += delta;
@@ -495,29 +551,39 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
               }
             }
 
-            const success = reply.raw.write(value as Uint8Array);
-            if (!success) {
-              fastify.log.warn('Write buffer full, backpressure applied');
-            }
+            reply.raw.write(value);
             return pump();
           };
 
           await pump();
         } else {
-          // No body - cleanup and end
-          await fastify.prisma.conversation
-            .delete({ where: { id: conversation.id } })
-            .catch(() => {});
+          // No body - just send state
+          const finalState: EphemeralState = {
+            ...driftState,
+            messages: [
+              ...driftState.messages,
+              {
+                id: `msg-${driftState.messages.length + 1}`,
+                role: "assistant",
+                content: "",
+                branchId: driftState.currentBranchId,
+                branchTopic: driftState.currentBranchTopic,
+                action: "STAY",
+                driftAction: "STAY",
+              },
+            ],
+          };
+          reply.raw.write(`data: [STATE]${JSON.stringify(finalState)}\n\n`);
           reply.raw.end();
         }
       } catch (err) {
-        fastify.log.error({ err }, 'Demo chat error');
+        fastify.log.error({ err }, "Demo chat error");
         return reply.status(500).send({
           success: false,
-          error: { message: 'Demo service temporarily unavailable' },
+          error: { message: "Demo service temporarily unavailable" },
         });
       }
-    }
+    },
   );
 };
 
