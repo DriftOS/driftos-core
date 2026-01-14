@@ -314,7 +314,7 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           data: {
             id: demoConversationId,
             userId: 'demo-user',
-            title: 'Demo Conversation',
+            topic: 'Demo Conversation',
           },
         });
 
