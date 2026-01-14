@@ -1,5 +1,6 @@
 import type { FactsContext, ExtractedFact } from '../types';
 import { getConfig } from '@plugins/env';
+import { getModelConfig, getApiKey } from '@/config/llm-models';
 import { createLogger } from '@utils/logger';
 
 const logger = createLogger('facts');
@@ -83,19 +84,37 @@ OUTPUT FORMAT (respond with ONLY this JSON, no other text):
   ]
 }`;
 
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const modelId = config.FACT_EXTRACTION_MODEL;
+  const modelConfig = getModelConfig(modelId);
+  const apiKey = getApiKey(modelConfig.provider, config);
+
+  const body: Record<string, unknown> = {
+    model: modelId,
+    messages: [{ role: 'user', content: prompt }],
+    max_tokens: 1000,
+  };
+
+  // Only add temperature if model supports it
+  if (modelConfig.supportsTemperature ?? true) {
+    body.temperature = modelConfig.defaultTemperature ?? 0.2;
+  }
+
+  // Add response_format for models that support it
+  if (modelConfig.provider !== 'anthropic') {
+    if (modelConfig.supportsJsonSchema) {
+      body.response_format = FACT_SCHEMA;
+    } else {
+      body.response_format = { type: 'json_object' };
+    }
+  }
+
+  const response = await fetch(modelConfig.baseUrl, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${config.LLM_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model: config.LLM_MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.2,
-      max_tokens: 1000,
-      response_format: FACT_SCHEMA,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {

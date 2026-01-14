@@ -42,7 +42,7 @@ services:
       - driftos_grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
-      - "3002:3000"
+      - "3010:3000"  # Moved to 3010 to avoid conflict with driftos-embed-enterprise (3002)
     depends_on:
       - prometheus
 

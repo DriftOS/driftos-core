@@ -55,7 +55,17 @@ export class ContextOrchestrator extends BaseOrchestrator<
         content: m.content,
         createdAt: m.createdAt.toISOString(),
       })),
-      allFacts: ctx.allFacts ?? [],
+      allFacts: (ctx.allFacts ?? []).map((bf) => ({
+        branchId: bf.branchId,
+        branchTopic: bf.branchTopic,
+        isCurrent: bf.isCurrent,
+        facts: bf.facts.map((f) => ({
+          id: f.id,
+          key: f.key,
+          value: f.value,
+          confidence: f.confidence,
+        })),
+      })),
     };
   }
 }

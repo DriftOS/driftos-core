@@ -4,16 +4,7 @@ import {
   processEphemeralConversation,
   type EphemeralState,
 } from "@services/drift/ephemeral";
-
-// Provider endpoints
-const PROVIDER_ENDPOINTS: Record<string, string> = {
-  groq: "https://api.groq.com/openai/v1/chat/completions",
-  openai: "https://api.openai.com/v1/chat/completions",
-  anthropic: "https://api.anthropic.com/v1/messages",
-};
-
-// Demo endpoint constants - hardcoded for security
-const DEMO_MODEL = "llama-3.1-8b-instant";
+import { getModelConfig, getApiKey } from "@/config/llm-models";
 
 // Fact extraction prompt - same as full version
 const FACT_EXTRACTION_PROMPT = `Analyze ONLY the messages below and extract key facts.
@@ -47,7 +38,11 @@ interface FactExtractionResult {
 
 async function extractFactsFromBranch(
   messages: Array<{ role: string; content: string }>,
+  modelId: string,
+  modelBaseUrl: string,
   apiKey: string,
+  supportsTemperature: boolean,
+  defaultTemperature: number,
 ): Promise<FactExtractionResult> {
   if (messages.length === 0) {
     return { branchTopic: "New conversation", facts: [] };
@@ -60,19 +55,24 @@ async function extractFactsFromBranch(
   const prompt = `${FACT_EXTRACTION_PROMPT}\n\nConversation:\n${conversationText}\n\nOutput JSON:`;
 
   try {
-    const response = await fetch(PROVIDER_ENDPOINTS.groq!, {
+    const body: Record<string, unknown> = {
+      model: modelId,
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 512,
+      response_format: { type: "json_object" },
+    };
+
+    if (supportsTemperature) {
+      body.temperature = defaultTemperature ?? 0.3;
+    }
+
+    const response = await fetch(modelBaseUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: DEMO_MODEL,
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 512,
-        temperature: 0.3,
-        response_format: { type: "json_object" },
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
@@ -218,15 +218,10 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       reply.header("X-RateLimit-Remaining", rateLimit.remaining);
       reply.header("X-RateLimit-Reset", Math.ceil(rateLimit.resetIn / 1000));
 
-      // Get server-side Groq API key
-      const apiKey = fastify.config.GROQ_API_KEY;
-      if (!apiKey) {
-        fastify.log.error("Demo endpoint: GROQ_API_KEY not configured");
-        return reply.status(500).send({
-          success: false,
-          error: { message: "Demo service temporarily unavailable" },
-        });
-      }
+      // Get demo model configuration
+      const modelId = fastify.config.DEMO_MODEL;
+      const modelConfig = getModelConfig(modelId);
+      const apiKey = getApiKey(modelConfig.provider, fastify.config);
 
       let { messages, system } = request.body;
 
@@ -244,21 +239,25 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           content: m.content.slice(0, DEMO_MAX_MESSAGE_LENGTH),
         }));
 
-      // Build request body - always Groq format with fixed model
+      // Build request body with model-specific configuration
       const allMessages = system
         ? [{ role: "system", content: system }, ...messages]
         : messages;
 
-      const body = {
-        model: DEMO_MODEL,
+      const body: Record<string, unknown> = {
+        model: modelId,
         messages: allMessages,
         max_tokens: DEMO_MAX_TOKENS,
-        temperature: 0.7,
         stream: true,
       };
 
+      // Only add temperature if model supports it
+      if (modelConfig.supportsTemperature ?? true) {
+        body.temperature = modelConfig.defaultTemperature ?? 0.7;
+      }
+
       try {
-        const response = await fetch(PROVIDER_ENDPOINTS.groq!, {
+        const response = await fetch(modelConfig.baseUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -383,14 +382,10 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       reply.header("X-RateLimit-Remaining", rateLimit.remaining);
       reply.header("X-RateLimit-Reset", Math.ceil(rateLimit.resetIn / 1000));
 
-      const apiKey = fastify.config.GROQ_API_KEY;
-      if (!apiKey) {
-        fastify.log.error("Demo endpoint: GROQ_API_KEY not configured");
-        return reply.status(500).send({
-          success: false,
-          error: { message: "Demo service temporarily unavailable" },
-        });
-      }
+      // Get demo model configuration
+      const modelId = fastify.config.DEMO_MODEL;
+      const modelConfig = getModelConfig(modelId);
+      const apiKey = getApiKey(modelConfig.provider, fastify.config);
 
       const { messages, extractFacts } = request.body;
       let { system } = request.body;
@@ -424,15 +419,19 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           ? [{ role: "system", content: system }, ...sanitizedMessages]
           : sanitizedMessages;
 
-        const body = {
-          model: DEMO_MODEL,
+        const body: Record<string, unknown> = {
+          model: modelId,
           messages: llmMessages,
           max_tokens: DEMO_MAX_TOKENS,
-          temperature: 0.7,
           stream: true,
         };
 
-        const response = await fetch(PROVIDER_ENDPOINTS.groq!, {
+        // Only add temperature if model supports it
+        if (modelConfig.supportsTemperature ?? true) {
+          body.temperature = modelConfig.defaultTemperature ?? 0.7;
+        }
+
+        const response = await fetch(modelConfig.baseUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -505,7 +504,11 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
                   const extraction = await extractFactsFromBranch(
                     branchMessages,
+                    modelId,
+                    modelConfig.baseUrl,
                     apiKey,
+                    modelConfig.supportsTemperature ?? true,
+                    modelConfig.defaultTemperature ?? 0.3,
                   );
 
                   return {

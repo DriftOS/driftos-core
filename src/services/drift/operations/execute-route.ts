@@ -89,6 +89,7 @@ export async function executeRoute(ctx: DriftContext): Promise<DriftContext> {
   const message = await prisma.message.create({
     data: {
       branchId,
+      conversationId: ctx.conversationId,
       role: ctx.role,
       content: ctx.content,
       embedding: ctx.embedding ?? [],

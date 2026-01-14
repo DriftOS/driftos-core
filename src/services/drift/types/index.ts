@@ -25,6 +25,9 @@ export interface DriftInput {
   policy?: Partial<DriftPolicy>;
   userId?: string; // Clerk user ID for authenticated users
   clientIp?: string; // For demo user isolation
+  // Optional model override for routing decision
+  routingModel?: string; // e.g., 'meta-llama/llama-4-scout-17b-16e-instruct'
+  routingProvider?: 'groq' | 'openai' | 'anthropic';
 }
 
 /**
@@ -48,6 +51,9 @@ export interface DriftContext extends OperationContext {
   policy: DriftPolicy;
   userId?: string; // Clerk user ID for authenticated users
   clientIp?: string; // For demo user isolation
+  // Optional model override for routing decision
+  routingModel?: string;
+  routingProvider?: 'groq' | 'openai' | 'anthropic';
 
   reasonCodes: string[];
   currentBranch?: Branch;
@@ -58,6 +64,15 @@ export interface DriftContext extends OperationContext {
     action: RouteAction;
     targetBranchId?: string;
     newBranchTopic?: string;
+    reason: string;
+    confidence: number;
+  };
+
+  // Raw LLM response for analysis display
+  llmResponse?: {
+    action: RouteAction;
+    targetBranchId?: string | null;
+    newBranchTopic?: string | null;
     reason: string;
     confidence: number;
   };
@@ -75,9 +90,29 @@ export interface DriftResult {
   messageId: string;
   previousBranchId?: string;
   isNewBranch: boolean;
+  isNewCluster: boolean;
   reason: string;
   branchTopic?: string;
   confidence: number;
+  similarity: number;
+  driftAction: 'STAY' | 'BRANCH_SAME_CLUSTER' | 'BRANCH_NEW_CLUSTER';
   reasonCodes: string[];
-  metadata?: Record<string, unknown>;
+  metadata?: {
+    llmAnalysis?: {
+      action: RouteAction;
+      targetBranchId?: string | null;
+      newBranchTopic?: string | null;
+      reason: string;
+      confidence: number;
+      currentBranch?: {
+        id: string;
+        summary: string;
+      };
+      otherBranches?: Array<{
+        id: string;
+        summary: string;
+      }>;
+    };
+    [key: string]: unknown;
+  };
 }

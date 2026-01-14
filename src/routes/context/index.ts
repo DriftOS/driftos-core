@@ -19,7 +19,7 @@ const contextRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           includeAncestorFacts: Type.Optional(Type.Boolean({ default: true })),
           maxAncestorDepth: Type.Optional(Type.Number({ default: 5 })),
         }),
-        typescriptresponse: {
+        response: {
           200: Type.Object({
             success: Type.Literal(true),
             data: Type.Object({

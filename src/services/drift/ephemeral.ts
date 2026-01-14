@@ -29,6 +29,24 @@ export interface EphemeralMessage {
   branchId: string;
   branchTopic: string;
   action: 'STAY' | 'ROUTE' | 'BRANCH';
+  driftAction: 'STAY' | 'BRANCH_SAME_CLUSTER' | 'BRANCH_NEW_CLUSTER';
+  metadata?: {
+    llmAnalysis?: {
+      action: 'STAY' | 'ROUTE' | 'BRANCH';
+      targetBranchId?: string;
+      newBranchTopic?: string;
+      reason: string;
+      confidence: number;
+      currentBranch?: {
+        id: string;
+        summary: string;
+      };
+      otherBranches?: Array<{
+        id: string;
+        summary: string;
+      }>;
+    };
+  };
 }
 
 export interface EphemeralState {
@@ -42,7 +60,10 @@ export interface EphemeralState {
  * Process messages through LLM-based drift routing without database persistence
  */
 export async function processEphemeralConversation(
-  messages: InputMessage[]
+  messages: InputMessage[],
+  options: {
+    extractFacts?: boolean;
+  } = {},
 ): Promise<EphemeralState> {
   const branches: EphemeralBranch[] = [];
   const allMessages: EphemeralMessage[] = [];
@@ -105,6 +126,29 @@ export async function processEphemeralConversation(
       branchTopic = branches.find(b => b.id === currentBranchId)?.topic || 'Unknown';
     }
 
+    // Build LLM analysis metadata if available
+    const llmAnalysis = result.llmResponse
+      ? {
+          action: result.llmResponse.action,
+          targetBranchId: result.llmResponse.targetBranchId ?? undefined,
+          newBranchTopic: result.llmResponse.newBranchTopic ?? undefined,
+          reason: result.llmResponse.reason,
+          confidence: result.llmResponse.confidence,
+          currentBranch: result.currentBranch
+            ? {
+                id: result.currentBranch.id,
+                summary: result.currentBranch.summary ?? 'Unknown',
+              }
+            : undefined,
+          otherBranches: result.branches
+            ?.filter((b) => !b.isCurrentBranch)
+            .map((b) => ({
+              id: b.id,
+              summary: b.summary,
+            })),
+        }
+      : undefined;
+
     // Create ephemeral message
     const ephemeralMsg: EphemeralMessage = {
       id: messageId,
@@ -113,6 +157,8 @@ export async function processEphemeralConversation(
       branchId: targetBranchId,
       branchTopic,
       action: classification.action,
+      driftAction: 'STAY', // LLM-based routing doesn't have cluster concept
+      metadata: llmAnalysis ? { llmAnalysis } : undefined,
     };
 
     // Update branch message count

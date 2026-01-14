@@ -41,11 +41,17 @@ const envSchema = Type.Object({
   // Embeddings
   EMBEDDING_MODEL: Type.String({ default: 'Xenova/all-MiniLM-L6-v2' }),
 
-  // LLM
+  // LLM (Legacy - kept for backward compatibility)
   LLM_PROVIDER: Type.String({ default: 'groq' }),
   LLM_MODEL: Type.String({ default: 'llama-3.1-8b-instant' }),
   LLM_API_KEY: Type.String({ default: '' }),
   LLM_TIMEOUT: Type.Number({ default: 5000 }),
+
+  // Operation-specific LLM Models
+  DRIFT_ROUTING_MODEL: Type.String({ default: 'meta-llama/llama-4-scout-17b-16e-instruct' }),
+  FACT_EXTRACTION_MODEL: Type.String({ default: 'llama-3.1-8b-instant' }),
+  CHAT_MODEL: Type.String({ default: 'llama-3.1-8b-instant' }),
+  DEMO_MODEL: Type.String({ default: '' }), // Falls back to CHAT_MODEL
 
   // LLM Provider API Keys
   GROQ_API_KEY: Type.String({ default: '' }),
@@ -73,6 +79,11 @@ export default fp(
       dotenv: true,
       data: process.env,
     });
+
+    // Set DEMO_MODEL fallback to CHAT_MODEL if not specified
+    if (!fastify.config.DEMO_MODEL) {
+      fastify.config.DEMO_MODEL = fastify.config.CHAT_MODEL;
+    }
 
     // Set the config for non-Fastify contexts
     setConfig(fastify.config);

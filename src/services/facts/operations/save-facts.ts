@@ -42,7 +42,7 @@ export async function saveFacts(ctx: FactsContext): Promise<FactsContext> {
           key: f.key,
           value: f.value,
           confidence: f.confidence,
-          messageId: f.messageId,
+          messageIds: f.messageId ? [f.messageId] : [],
         },
       })
     )

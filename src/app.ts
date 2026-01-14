@@ -19,6 +19,8 @@ import contextRoutes from './routes/context/index';
 import llmRoutes from './routes/llm/index';
 import demoRoutes from './routes/demo/index';
 import conversationsRoutes from './routes/conversations/index';
+import branchRoutes from './routes/branches/index';
+import messageRoutes from './routes/messages/index';
 
 export async function buildApp() {
   const app = Fastify({
@@ -49,6 +51,23 @@ export async function buildApp() {
     contentSecurityPolicy: false,
   });
 
+  // Custom content-type parser for DELETE requests with empty bodies
+  // Fastify's default JSON parser throws FST_ERR_CTP_EMPTY_JSON_BODY for empty bodies
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+    if (req.method === 'DELETE' && body === '') {
+      done(null, {});
+    } else {
+      try {
+        const json = JSON.parse(body as string);
+        done(null, json);
+      } catch (err: unknown) {
+        const error = err as Error & { statusCode?: number };
+        error.statusCode = 400;
+        done(error, undefined);
+      }
+    }
+  });
+
   // NOTE: Rate limiting is handled by the gateway in production
   // This service is internal-only and should only receive traffic from the gateway
   // Keeping rate limit config in env for backwards compatibility, but not applying it
@@ -64,6 +83,8 @@ export async function buildApp() {
       await fastify.register(llmRoutes, { prefix: '/llm' });
       await fastify.register(demoRoutes, { prefix: '/demo' });
       await fastify.register(conversationsRoutes, { prefix: '/conversations' });
+      await fastify.register(branchRoutes, { prefix: '/branches' });
+      await fastify.register(messageRoutes, { prefix: '/messages' });
     },
     { prefix: `${app.config.API_PREFIX}/${app.config.API_VERSION}` }
   );
