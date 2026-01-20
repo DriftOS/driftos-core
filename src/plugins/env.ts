@@ -4,7 +4,7 @@ import { Type, Static } from '@sinclair/typebox';
 
 const envSchema = Type.Object({
   NODE_ENV: Type.String({ default: 'development' }),
-  PORT: Type.Number({ default: 3000 }),
+  PORT: Type.Number({ default: 3001 }),  // driftos-core local port (Fly: 3000)
   HOST: Type.String({ default: '::' }),
   LOG_LEVEL: Type.String({ default: 'info' }),
 
@@ -15,16 +15,11 @@ const envSchema = Type.Object({
   API_PREFIX: Type.String({ default: '/api' }),
   API_VERSION: Type.String({ default: 'v1' }),
 
-  // Rate Limiting
-  RATE_LIMIT_MAX: Type.Number({ default: 100 }),
-  RATE_LIMIT_TIME_WINDOW: Type.Number({ default: 60000 }),
+  // Rate Limiting - REMOVED: All rate limiting is handled by the gateway
+  // Backend services should not implement rate limiting
 
-  // Demo Endpoint Rate Limiting
-  DEMO_RATE_LIMIT: Type.Number({ default: 10 }),
-  DEMO_RATE_WINDOW: Type.Number({ default: 60000 }),
-
-  // CORS
-  CORS_ORIGIN: Type.String({ default: 'http://localhost:3001,http://localhost:3000' }),
+  // CORS (only gateway should call this service directly)
+  CORS_ORIGIN: Type.String({ default: 'http://localhost:3000' }),  // Gateway port
   CORS_CREDENTIALS: Type.Boolean({ default: true }),
 
   // Monitoring

@@ -16,14 +16,15 @@ datasource db {
 // ============================================================================
 
 model Conversation {
-  id        String    @id @default(cuid())
-  userId    String?   /// Clerk user ID - null for anonymous/demo conversations
-  topic     String?
-  metadata  Json?
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  
+  id                 String    @id @default(cuid())
+  userId             String?   /// Clerk user ID - null for anonymous/demo conversations
+  topic              String?
+  lastActiveBranchId String?   /// Track current branch explicitly (not via updatedAt)
+  metadata           Json?
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
   branches  Branch[]
   clusters  Cluster[]
   messages  Message[]

@@ -74,9 +74,12 @@
     "bcryptjs": "^3.0.3",
     "fastify": "^5.6.2",
     "fastify-plugin": "^5.1.0",
+    "groq-sdk": "^0.37.0",
     "pino": "^8.17.2",
     "pino-pretty": "^10.3.1",
-    "prom-client": "^15.1.0"
+    "prom-client": "^15.1.0",
+    "zod": "^4.3.5",
+    "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",

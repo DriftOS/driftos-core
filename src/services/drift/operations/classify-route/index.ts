@@ -6,12 +6,16 @@ import { parseResponse, buildPrompt, callLLM } from './helpers';
  * ClassifyRoute Operation
  *
  * Calls LLM to determine: STAY, ROUTE, or BRANCH
+ * Optionally extracts facts if ctx.extractFacts is true (default: false)
  */
 export async function classifyRoute(ctx: DriftContext): Promise<DriftContext> {
   const config = getConfig();
 
   const currentBranch = ctx.branches?.find((b) => b.isCurrentBranch);
   const otherBranches = ctx.branches?.filter((b) => !b.isCurrentBranch) ?? [];
+
+  // Get extractFacts flag from context (default: false for routing-only mode)
+  const extractFacts = ctx.extractFacts ?? false;
 
   // Assistant messages always STAY - they are responses to user messages
   // and should remain in the same branch context
@@ -25,16 +29,33 @@ export async function classifyRoute(ctx: DriftContext): Promise<DriftContext> {
     return ctx;
   }
 
-  // Build prompt for user messages
-  const prompt = buildPrompt(ctx.content, currentBranch, otherBranches);
-  // Call LLM with optional model override from context
-  const response = await callLLM(prompt, config, ctx.routingModel, ctx.routingProvider);
+  // Build prompt for user messages (with or without facts extraction)
+  const prompt = buildPrompt(ctx.content, currentBranch, otherBranches, ctx.recentMessages, extractFacts);
 
-  const classification = parseResponse(response, currentBranch?.id);
+  // Log prompt for debugging
+  console.log(`\n=== ROUTING PROMPT (extractFacts: ${extractFacts}) ===`);
+  console.log(prompt);
+  console.log('======================\n');
+
+  // Call LLM with optional model override from context and extractFacts flag
+  const llmResponse = await callLLM(prompt, config, extractFacts, ctx.routingModel, ctx.routingProvider);
+
+  // Log LLM response for debugging
+  console.log('\n=== LLM RESPONSE ===');
+  console.log(llmResponse.content);
+  console.log('====================\n');
+
+  const classification = parseResponse(llmResponse.content, currentBranch?.id, otherBranches);
+
+  // Store token usage and model info
+  ctx.tokenUsage = llmResponse.usage;
+  ctx.llmModel = llmResponse.model;
 
   // Store raw LLM response for analysis display
   try {
-    ctx.llmResponse = JSON.parse(response);
+    const parsedResponse = JSON.parse(llmResponse.content);
+    // Extract just the decision part (which has action, reason, confidence, etc.)
+    ctx.llmResponse = parsedResponse.decision;
   } catch {
     // If parsing fails, response will not be available for analysis
   }

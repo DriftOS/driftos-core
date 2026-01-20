@@ -98,6 +98,12 @@ export async function executeRoute(ctx: DriftContext): Promise<DriftContext> {
     },
   });
 
+  // Update conversation's lastActiveBranchId to track current branch
+  await prisma.conversation.update({
+    where: { id: ctx.conversationId },
+    data: { lastActiveBranchId: branchId },
+  });
+
   // Update branch centroid (running average)
   if (ctx.embedding && action !== 'BRANCH') {
     await updateCentroid(branchId, ctx.embedding);

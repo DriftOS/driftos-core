@@ -33,6 +33,7 @@ export class DriftOrchestrator extends BaseOrchestrator<DriftContext, DriftResul
       clientIp: input.clientIp,
       routingModel: input.routingModel,
       routingProvider: input.routingProvider,
+      extractFacts: input.extractFacts ?? false, // Default to routing-only mode
       requestId: Math.random().toString(36).substr(2, 9),
       startTime: Date.now(),
       perfTracker: new DefaultPerformanceTracker(),
@@ -49,6 +50,7 @@ export class DriftOrchestrator extends BaseOrchestrator<DriftContext, DriftResul
     return [
       { name: 'validate-input', operation: ops.validateInput, critical: true },
       { name: 'load-branches', operation: ops.loadBranches, critical: true },
+      { name: 'load-recent-messages', operation: ops.loadRecentMessages, critical: false },
       //{ name: 'embed-message', operation: ops.embedMessage, critical: true },
       { name: 'classify-route', operation: ops.classifyRoute, critical: true },
       { name: 'execute-route', operation: ops.executeRoute, critical: true },
@@ -97,6 +99,8 @@ export class DriftOrchestrator extends BaseOrchestrator<DriftContext, DriftResul
       metadata: {
         ...ctx.metadata,
         llmAnalysis,
+        tokenUsage: ctx.tokenUsage,
+        llmModel: ctx.llmModel,
       },
       branchTopic: ctx.branch.summary ?? 'Unknown',
       confidence: ctx.classification?.confidence ?? 0,

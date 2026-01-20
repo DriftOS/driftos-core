@@ -31,6 +31,9 @@ export class DriftService {
       currentBranchId?: string;
       userId?: string;
       clientIp?: string;
+      routingModel?: string;
+      routingProvider?: 'groq' | 'openai' | 'anthropic';
+      extractFacts?: boolean;
     } = {}
   ): Promise<OrchestratorResult<DriftResult>> {
     const input: DriftInput = {
@@ -40,6 +43,9 @@ export class DriftService {
       currentBranchId: options.currentBranchId,
       userId: options.userId,
       clientIp: options.clientIp,
+      routingModel: options.routingModel,
+      routingProvider: options.routingProvider,
+      extractFacts: options.extractFacts,
     };
 
     return this.orchestrator.execute(input);

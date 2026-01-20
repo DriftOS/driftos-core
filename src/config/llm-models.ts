@@ -136,23 +136,63 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
     maxTokens: 2000,
     description: 'Best OpenAI model. Excellent structured output.',
   },
+  'openai/gpt-oss-20b': {
+    id: 'openai/gpt-oss-20b',
+    provider: 'groq',
+    baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
+    supportsJsonSchema: true,
+    defaultTemperature: 0.1,
+    maxTokens: 1000,
+    description: 'GPT OSS 20B via Groq. Good for structured output.',
+  },
+  'openai/gpt-oss-120b': {
+    id: 'openai/gpt-oss-120b',
+    provider: 'groq',
+    baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
+    supportsJsonSchema: true,
+    defaultTemperature: 0.1,
+    maxTokens: 2000,
+    description: 'GPT OSS 120B via Groq. Better reasoning and structured output.',
+  },
 };
 
 /**
  * Get model config with fallback to defaults
  */
 export function getModelConfig(modelId: string): ModelConfig {
-  return (
-    MODEL_CONFIGS[modelId] ?? {
-      id: modelId,
-      provider: 'groq',
-      baseUrl: 'https://api.groq.com/openai/v1',
-      supportsJsonSchema: false,
-      defaultTemperature: 0.1,
-      maxTokens: 1000,
-      description: 'Unknown model - using safe defaults',
-    }
-  );
+  if (MODEL_CONFIGS[modelId]) {
+    return MODEL_CONFIGS[modelId];
+  }
+
+  // Dynamic fallback based on model name patterns
+  let provider: Provider = 'groq';
+  let baseUrl = 'https://api.groq.com/openai/v1/chat/completions';
+  let supportsJsonSchema = false;
+
+  // Detect provider from model name
+  if (modelId.startsWith('gpt-') || modelId.startsWith('o1-') || modelId.includes('openai/')) {
+    provider = 'openai';
+    baseUrl = 'https://api.openai.com/v1/chat/completions';
+    supportsJsonSchema = true;
+  } else if (modelId.startsWith('claude-')) {
+    provider = 'anthropic';
+    baseUrl = 'https://api.anthropic.com/v1/messages';
+    supportsJsonSchema = false;
+  } else if (modelId.includes('llama') || modelId.includes('meta-')) {
+    provider = 'groq';
+    baseUrl = 'https://api.groq.com/openai/v1/chat/completions';
+    supportsJsonSchema = true; // Most recent models support it
+  }
+
+  return {
+    id: modelId,
+    provider,
+    baseUrl,
+    supportsJsonSchema,
+    defaultTemperature: 0.1,
+    maxTokens: 1000,
+    description: `Unknown model - inferred ${provider} provider`,
+  };
 }
 
 /**

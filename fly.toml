@@ -12,15 +12,9 @@ primary_region = 'lhr'
   # API
   API_PREFIX = '/api'
   API_VERSION = 'v1'
-  
-  # Rate Limiting
-  RATE_LIMIT_MAX = '1000'
-  RATE_LIMIT_TIME_WINDOW = '60000'
-  
-  # Demo Endpoint Rate Limiting
-  DEMO_RATE_LIMIT = '100'
-  DEMO_RATE_WINDOW = '60000'
-  
+
+  # Rate Limiting - REMOVED: All rate limiting is handled by the gateway
+
   # CORS - allow demo frontend
   CORS_ORIGIN = 'https://driftos-demo.fly.dev,https://playground.driftos.dev'
   CORS_CREDENTIALS = 'true'

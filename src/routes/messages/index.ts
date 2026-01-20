@@ -24,6 +24,7 @@ const messageRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
             })
           ),
           currentBranchId: Type.Optional(Type.String()),
+          extractFacts: Type.Optional(Type.Boolean()), // Optional: extract facts during routing (default: false)
         }),
         response: {
           200: Type.Object({
@@ -67,7 +68,7 @@ const messageRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { conversationId, content, role = 'user', currentBranchId } = request.body;
+      const { conversationId, content, role = 'user', currentBranchId, extractFacts } = request.body;
 
       // Verify conversation exists and check ownership
       const conversation = await fastify.prisma.conversation.findUnique({
@@ -99,6 +100,7 @@ const messageRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         currentBranchId,
         routingModel,
         routingProvider,
+        extractFacts: extractFacts ?? false, // Default to routing-only mode
       });
 
       if (!result.success) {

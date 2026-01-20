@@ -28,6 +28,8 @@ export interface DriftInput {
   // Optional model override for routing decision
   routingModel?: string; // e.g., 'meta-llama/llama-4-scout-17b-16e-instruct'
   routingProvider?: 'groq' | 'openai' | 'anthropic';
+  // Optional: extract facts during routing (default: false for routing-only mode)
+  extractFacts?: boolean;
 }
 
 /**
@@ -36,8 +38,10 @@ export interface DriftInput {
 export interface BranchSummary {
   id: string;
   summary: string;
+  context?: string; // Evolving semantic context for routing decisions
   messageCount: number;
   isCurrentBranch: boolean;
+  factKeys?: string[]; // Existing fact keys for this branch (for smart fact updates)
 }
 
 /**
@@ -54,10 +58,13 @@ export interface DriftContext extends OperationContext {
   // Optional model override for routing decision
   routingModel?: string;
   routingProvider?: 'groq' | 'openai' | 'anthropic';
+  // Optional: extract facts during routing (default: false)
+  extractFacts?: boolean;
 
   reasonCodes: string[];
   currentBranch?: Branch;
   branches?: BranchSummary[];
+  recentMessages?: Array<{ role: string; content: string }>;
   embedding?: number[];
 
   classification?: {
@@ -66,6 +73,17 @@ export interface DriftContext extends OperationContext {
     newBranchTopic?: string;
     reason: string;
     confidence: number;
+    // Fact extraction fields
+    branchContext?: string;
+    facts?: Array<{
+      key: string; // Fact key (e.g., "location", "budget", "destination")
+      values: Array<{
+        value: string;
+        confidence: number;
+        supersedes?: string[]; // Optional: existing values to mark as superseded
+      }>;
+      isUpdate: boolean; // true if updating existing fact, false if new
+    }>;
   };
 
   // Raw LLM response for analysis display
@@ -76,6 +94,14 @@ export interface DriftContext extends OperationContext {
     reason: string;
     confidence: number;
   };
+
+  // Token usage from LLM call
+  tokenUsage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+  llmModel?: string;
 
   message?: Message;
   branch?: Branch;
@@ -113,6 +139,12 @@ export interface DriftResult {
         summary: string;
       }>;
     };
+    tokenUsage?: {
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+    };
+    llmModel?: string;
     [key: string]: unknown;
   };
 }

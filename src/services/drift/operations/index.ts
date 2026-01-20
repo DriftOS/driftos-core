@@ -7,6 +7,7 @@
 
 export * from './validate-input';
 export * from './load-branches';
+export * from './load-recent-messages';
 export * from './embed-message';
 export * from './classify-route';
 export * from './execute-route';

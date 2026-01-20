@@ -15,6 +15,7 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           content: Type.String(),
           role: Type.Optional(Type.Union([Type.Literal('user'), Type.Literal('assistant')])),
           currentBranchId: Type.Optional(Type.String()),
+          extractFacts: Type.Optional(Type.Boolean()), // Optional: extract facts during routing (default: false)
         }),
         response: {
           200: Type.Object({
@@ -52,7 +53,7 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { conversationId, content, role, currentBranchId } = request.body;
+      const { conversationId, content, role, currentBranchId, extractFacts } = request.body;
 
       // Get optional routing model override from headers
       const routingModel = request.headers['x-routing-model'] as string | undefined;
@@ -65,6 +66,7 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         clientIp: request.ip,
         routingModel,
         routingProvider,
+        extractFacts: extractFacts ?? false, // Default to routing-only mode
       });
 
       if (!result.success) {
@@ -72,6 +74,16 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           success: false,
           error: { message: result.error?.message || 'Routing failed' },
         });
+      }
+
+      // Add token usage to response headers for gateway tracking
+      if (result.data?.metadata?.tokenUsage) {
+        reply.header('X-Token-Input', result.data.metadata.tokenUsage.inputTokens.toString());
+        reply.header('X-Token-Output', result.data.metadata.tokenUsage.outputTokens.toString());
+        reply.header('X-Token-Total', result.data.metadata.tokenUsage.totalTokens.toString());
+      }
+      if (result.data?.metadata?.llmModel) {
+        reply.header('X-LLM-Model', result.data.metadata.llmModel);
       }
 
       return reply.send({

@@ -6,6 +6,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 const PUBLIC_ROUTES = [
   '/api/v1/demo/stream', // Demo streaming endpoint - rate limited by IP
   '/api/v1/demo/chat', // Demo chat with drift - rate limited by IP
+  '/api/v1/demo/route', // Demo chat with drift - rate limited by IP
   '/api/v1/health', // Health checks for infrastructure
   '/health', // Root health check
   '/', // Root route
@@ -63,6 +64,13 @@ export default fp(
       }
 
       fastify.log.debug({ url: request.url }, 'Protected route - checking auth');
+
+      // TEMP: Bypass auth for local testing
+      if (process.env.NODE_ENV === 'development') {
+        fastify.log.warn('⚠️  AUTH BYPASSED - development mode');
+        request.userId = 'dev-user-123';
+        return;
+      }
 
       // Check for userId from gateway (proxied requests)
       const gatewayUserId = request.headers['x-user-id'] as string | undefined;

@@ -27,7 +27,7 @@ const FACT_SCHEMA = {
               confidence: { type: 'number' },
               messageId: { type: ['string', 'null'] },
             },
-            required: ['key', 'value', 'confidence'],
+            required: ['key', 'value', 'confidence', 'messageId'],
             additionalProperties: false,
           },
         },
@@ -80,7 +80,7 @@ OUTPUT FORMAT (respond with ONLY this JSON, no other text):
 {
   "branchTopic": "3-6 word topic name",
   "facts": [
-    {"key": "destination", "value": "Paris", "confidence": 0.9, "messageId": "abc123"}
+    {"key": "example_key", "value": "example value", "confidence": 0.9, "messageId": "msg_id_or_null"}
   ]
 }`;
 
@@ -118,7 +118,9 @@ OUTPUT FORMAT (respond with ONLY this JSON, no other text):
   });
 
   if (!response.ok) {
-    throw new Error(`LLM call failed: ${response.status}`);
+    const errorText = await response.text();
+    logger.error({ status: response.status, error: errorText }, 'LLM API error');
+    throw new Error(`LLM call failed: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
@@ -127,7 +129,31 @@ OUTPUT FORMAT (respond with ONLY this JSON, no other text):
 
   logger.info({ branchId: ctx.branchId, parsed }, 'LLM response parsed');
 
-  const facts: ExtractedFact[] = parsed.facts ?? [];
+  // Parse facts - handle both correct format and LLM's flat format
+  const rawFacts = parsed.facts ?? [];
+  const facts: ExtractedFact[] = rawFacts.map((f: any) => {
+    // If fact has key/value, use as-is (correct format)
+    if (f.key && f.value !== undefined) {
+      return f;
+    }
+
+    // Otherwise, LLM returned flat format like {weather_condition: "cold", confidence: 0.9}
+    // Extract the first property as the key/value pair
+    const entries = Object.entries(f).filter(([k]) => k !== 'confidence' && k !== 'messageId');
+    if (entries.length > 0) {
+      const [key, value] = entries[0];
+      return {
+        key,
+        value: String(value),
+        confidence: f.confidence ?? 0.9,
+        messageId: f.messageId ?? null,
+      };
+    }
+
+    // Couldn't parse, skip this fact
+    logger.warn({ fact: f }, 'Could not parse fact - skipping');
+    return null;
+  }).filter((f): f is ExtractedFact => f !== null);
 
   ctx.extractedFacts = facts.filter((f) => f.confidence >= ctx.policy.minConfidence);
   ctx.branchTopic = parsed.branchTopic;

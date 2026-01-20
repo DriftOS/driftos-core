@@ -1,35 +1,118 @@
+import Groq from 'groq-sdk';
+import { z } from 'zod';
 import { getConfig } from '@/plugins/env';
-import { getModelConfig, getApiKey, getResponseFormat } from '@/config/llm-models';
+import { getModelConfig, getApiKey } from '@/config/llm-models';
 
-const ROUTE_SCHEMA = {
-  type: 'json_schema',
-  json_schema: {
-    name: 'route_decision',
-    schema: {
-      type: 'object',
-      properties: {
-        action: { type: 'string', enum: ['STAY', 'ROUTE', 'BRANCH'] },
-        targetBranchId: { type: ['string', 'null'] },
-        newBranchTopic: { type: ['string', 'null'] },
-        reason: { type: 'string' },
-        confidence: { type: 'number' },
-      },
-      required: ['action', 'reason', 'confidence'],
-    },
-  },
-};
+export interface LLMResponse {
+  content: string;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+  model: string;
+}
 
-const JSON_INSTRUCTION = `
+// Decision discriminated union (shared by both schemas)
+const decisionUnion = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('STAY'),
+    targetBranchId: z.null(),
+    newBranchTopic: z.null(),
+    reason: z.string(),
+    confidence: z.number(),
+  }),
+  z.object({
+    action: z.literal('ROUTE'),
+    targetBranchId: z.string(),
+    newBranchTopic: z.null(),
+    reason: z.string(),
+    confidence: z.number(),
+  }),
+  z.object({
+    action: z.literal('BRANCH'),
+    targetBranchId: z.null(),
+    newBranchTopic: z.string(),
+    reason: z.string(),
+    confidence: z.number(),
+  }),
+]);
 
-IMPORTANT: You MUST respond with ONLY a valid JSON object in this exact format:
-{"action": "STAY" | "ROUTE" | "BRANCH", "targetBranchId": string | null, "newBranchTopic": string | null, "reason": string, "confidence": number}
+// Fact object structure (shared)
+// Note: All fields are REQUIRED for Groq strict mode (use empty array [] for no supersedes)
+// Note: isUpdate BEFORE values - makes LLM less likely to nest it inside values
+const factObjectSchema = z.object({
+  key: z.string(),
+  isUpdate: z.boolean(), // true if this fact KEY exists in branch already - MUST be at fact level
+  values: z.array(z.object({
+    value: z.string(),
+    confidence: z.number(),
+    supersedes: z.array(z.string()), // REQUIRED array - use [] if no supersession
+  })),
+});
 
-Do not include any other text, explanation, or markdown. Just the raw JSON object.`;
+// ROUTING-ONLY SCHEMA (no facts) for Groq
+const routeDecisionOnlySchemaGroq = z.object({
+  decision: decisionUnion,
+});
+
+// ROUTING-ONLY SCHEMA (no facts) for OpenAI
+const routeDecisionOnlySchemaOpenAI = z.object({
+  decision: decisionUnion,
+});
+
+// ROUTING + FACTS SCHEMA for Groq (all fields REQUIRED)
+const routeDecisionWithFactsSchemaGroq = z.object({
+  decision: decisionUnion,
+  branchContext: z.string(), // REQUIRED - use "" if no context
+  facts: z.array(factObjectSchema), // REQUIRED - use [] if no facts
+});
+
+// ROUTING + FACTS SCHEMA for OpenAI (facts optional)
+const routeDecisionWithFactsSchemaOpenAI = z.object({
+  decision: decisionUnion,
+  branchContext: z.string().optional(),
+  facts: z.array(factObjectSchema).optional(),
+});
+
+export type RouteDecision = z.infer<typeof routeDecisionWithFactsSchemaGroq>['decision'];
+
+// Semantic instructions for GROQ models (schema enforces structure via constrained decoding)
+const JSON_INSTRUCTION_GROQ = `
+
+ROUTING:
+- STAY: Message continues current topic
+- ROUTE: Message switches to existing topic (use topic number)
+- BRANCH: Message starts NEW topic (3-6 word name)
+
+FACTS:
+- branchContext: One sentence summary of what's being discussed
+- Extract ONLY important facts: decisions, preferences, places/dates/amounts, constraints
+- Use snake_case keys
+- isUpdate: true if fact key exists in [Facts: ...], false for new
+- Confidence: 1.0=definitive, 0.9=clear, 0.7=implied
+- supersedes: Only for REPLACEMENTS not additions`;
+
+// Semantic instructions for OPENAI models (schema enforces structure via constrained decoding)
+const JSON_INSTRUCTION_OPENAI = `
+
+ROUTING:
+- STAY: Message continues current topic
+- ROUTE: Message switches to existing topic (use topic number)
+- BRANCH: Message starts NEW topic (3-6 word name)
+
+FACTS (optional):
+- branchContext: One sentence summary
+- Extract ONLY important facts: decisions, preferences, places/dates/amounts, constraints
+- Use snake_case keys
+- isUpdate: true if fact key exists in [Facts: ...], false for new
+- Confidence: 1.0=definitive, 0.9=clear, 0.7=implied
+- supersedes: Only for REPLACEMENTS not additions`;
 
 function getProviderConfig(
   config: ReturnType<typeof getConfig>,
   modelOverride?: string,
-  providerOverride?: string
+  _providerOverride?: string
 ) {
   // Use override if provided, otherwise use env config
   const modelId = modelOverride || config.DRIFT_ROUTING_MODEL;
@@ -47,19 +130,124 @@ function getProviderConfig(
   };
 }
 
-async function callOpenAICompatible(
+async function callGroq(
   prompt: string,
-  providerConfig: ReturnType<typeof getProviderConfig>
-): Promise<string> {
-  const { apiKey, endpoint, supportsJsonSchema, supportsTemperature, defaultTemperature, model } =
-    providerConfig;
+  providerConfig: ReturnType<typeof getProviderConfig>,
+  extractFacts: boolean
+): Promise<LLMResponse> {
+  const { apiKey, supportsJsonSchema, supportsTemperature, defaultTemperature, model } = providerConfig;
 
-  const finalPrompt = supportsJsonSchema ? prompt : prompt + JSON_INSTRUCTION;
+  const groq = new Groq({ apiKey });
+
+  // Use appropriate instruction based on whether facts are being extracted
+  const instruction = extractFacts ? JSON_INSTRUCTION_GROQ : '';
+  const messages: Groq.Chat.Completions.ChatCompletionMessageParam[] = [
+    { role: 'user', content: supportsJsonSchema ? prompt : prompt + instruction }
+  ];
+
+  const requestParams: any = {
+    model,
+    messages,
+    max_tokens: extractFacts ? 1000 : 500, // Less tokens needed for routing-only
+  };
+
+  // Only add temperature if model supports it
+  if (supportsTemperature) {
+    requestParams.temperature = defaultTemperature ?? 0.1;
+  }
+
+  // Add strict JSON schema if supported, otherwise use json_object mode
+  if (supportsJsonSchema) {
+    // Use routing-only or routing+facts schema based on flag
+    const schema = extractFacts
+      ? routeDecisionWithFactsSchemaGroq.toJSONSchema()
+      : routeDecisionOnlySchemaGroq.toJSONSchema();
+
+    requestParams.response_format = {
+      type: 'json_schema',
+      json_schema: {
+        name: 'route_decision',
+        strict: true,
+        schema,
+      },
+    };
+  } else {
+    // Fallback to json_object mode for models without schema support
+    requestParams.response_format = { type: 'json_object' };
+  }
+
+  const response = await groq.chat.completions.create(requestParams);
+
+  const content = response.choices[0]?.message?.content || '{}';
+
+  return {
+    content,
+    usage: {
+      inputTokens: response.usage?.prompt_tokens || 0,
+      outputTokens: response.usage?.completion_tokens || 0,
+      totalTokens: response.usage?.total_tokens || 0,
+    },
+    model,
+  };
+}
+
+async function callAnthropic(
+  prompt: string,
+  providerConfig: ReturnType<typeof getProviderConfig>,
+  extractFacts: boolean
+): Promise<LLMResponse> {
+  const { apiKey, model } = providerConfig;
+
+  // Only add fact extraction instructions if enabled
+  const instruction = extractFacts ? JSON_INSTRUCTION_OPENAI : '';
+  const finalPrompt = prompt + instruction;
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: extractFacts ? 1000 : 500, // Less tokens for routing-only
+      messages: [{ role: 'user', content: finalPrompt }],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`LLM call failed: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json() as any;
+  return {
+    content: data.content[0].text,
+    usage: {
+      inputTokens: data.usage?.input_tokens || 0,
+      outputTokens: data.usage?.output_tokens || 0,
+      totalTokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+    },
+    model,
+  };
+}
+
+async function callOpenAI(
+  prompt: string,
+  providerConfig: ReturnType<typeof getProviderConfig>,
+  extractFacts: boolean
+): Promise<LLMResponse> {
+  const { apiKey, endpoint, supportsTemperature, defaultTemperature, model } = providerConfig;
+
+  // Only add fact extraction instructions if enabled
+  const instruction = extractFacts ? JSON_INSTRUCTION_OPENAI : '';
+  const finalPrompt = prompt + instruction;
 
   const body: Record<string, unknown> = {
     model,
     messages: [{ role: 'user', content: finalPrompt }],
-    max_tokens: 200,
+    max_tokens: extractFacts ? 1000 : 500, // Less tokens for routing-only
   };
 
   // Only add temperature if model supports it
@@ -67,9 +255,19 @@ async function callOpenAICompatible(
     body.temperature = defaultTemperature ?? 0.1;
   }
 
-  if (supportsJsonSchema) {
-    body.response_format = ROUTE_SCHEMA;
-  }
+  // Use routing-only or routing+facts schema based on flag
+  const schema = extractFacts
+    ? routeDecisionWithFactsSchemaOpenAI.toJSONSchema()
+    : routeDecisionOnlySchemaOpenAI.toJSONSchema();
+
+  body.response_format = {
+    type: 'json_schema',
+    json_schema: {
+      name: 'route_decision',
+      strict: true,
+      schema,
+    },
+  };
 
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -85,52 +283,38 @@ async function callOpenAICompatible(
     throw new Error(`LLM call failed: ${response.status} - ${errorText}`);
   }
 
-  const data = await response.json();
-  return data.choices[0].message.content;
-}
-
-async function callAnthropic(
-  prompt: string,
-  providerConfig: ReturnType<typeof getProviderConfig>
-): Promise<string> {
-  const { apiKey, model } = providerConfig;
-
-  const finalPrompt = prompt + JSON_INSTRUCTION;
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
+  const data = await response.json() as any;
+  return {
+    content: data.choices[0].message.content,
+    usage: {
+      inputTokens: data.usage?.prompt_tokens || 0,
+      outputTokens: data.usage?.completion_tokens || 0,
+      totalTokens: data.usage?.total_tokens || 0,
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: 200,
-      messages: [{ role: 'user', content: finalPrompt }],
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`LLM call failed: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  return data.content[0].text;
+    model,
+  };
 }
 
 export async function callLLM(
   prompt: string,
   config: ReturnType<typeof getConfig>,
+  extractFacts: boolean = false, // Default to routing-only
   modelOverride?: string,
   providerOverride?: string
-): Promise<string> {
+): Promise<LLMResponse> {
   const providerConfig = getProviderConfig(config, modelOverride, providerOverride);
 
   if (providerConfig.provider === 'anthropic') {
-    return callAnthropic(prompt, providerConfig);
+    return callAnthropic(prompt, providerConfig, extractFacts);
   }
 
-  return callOpenAICompatible(prompt, providerConfig);
+  if (providerConfig.provider === 'groq') {
+    return callGroq(prompt, providerConfig, extractFacts);
+  }
+
+  if (providerConfig.provider === 'openai') {
+    return callOpenAI(prompt, providerConfig, extractFacts);
+  }
+
+  throw new Error(`Unsupported provider: ${providerConfig.provider}`);
 }
