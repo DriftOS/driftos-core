@@ -153,7 +153,7 @@ async function callGroq(
 
   // Only add temperature if model supports it
   if (supportsTemperature) {
-    requestParams.temperature = defaultTemperature ?? 0.1;
+    requestParams.temperature = defaultTemperature ?? 0.0;
   }
 
   // Add strict JSON schema if supported, otherwise use json_object mode
@@ -252,7 +252,7 @@ async function callOpenAI(
 
   // Only add temperature if model supports it
   if (supportsTemperature) {
-    body.temperature = defaultTemperature ?? 0.1;
+    body.temperature = defaultTemperature ?? 0.0;
   }
 
   // Use routing-only or routing+facts schema based on flag
