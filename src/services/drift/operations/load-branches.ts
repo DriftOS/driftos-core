@@ -7,15 +7,24 @@ import { prisma } from '@plugins/prisma';
  * Loads branches for conversation, finds current branch, builds summaries for LLM.
  */
 export async function loadBranches(ctx: DriftContext): Promise<DriftContext> {
-  // Get conversation to check lastActiveBranchId
+  if (!ctx.userId) {
+    throw new Error('userId is required');
+  }
+
+  // Get conversation to check lastActiveBranchId (composite key lookup)
   const conversation = await prisma.conversation.findUnique({
-    where: { id: ctx.conversationId },
+    where: {
+      userId_id: {
+        userId: ctx.userId,
+        id: ctx.conversationId,
+      },
+    },
     select: { lastActiveBranchId: true },
   });
 
   // Get all branches for this conversation
   const branches = await prisma.branch.findMany({
-    where: { conversationId: ctx.conversationId },
+    where: { userId: ctx.userId, conversationId: ctx.conversationId },
     include: {
       _count: { select: { messages: true } },
     },

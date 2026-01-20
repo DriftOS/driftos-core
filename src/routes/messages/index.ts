@@ -69,24 +69,30 @@ const messageRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       const { conversationId, content, role = 'user', currentBranchId, extractFacts } = request.body;
+      const userId = request.userId;
 
-      // Verify conversation exists and check ownership
+      if (!userId) {
+        return reply.status(401).send({
+          success: false,
+          error: { message: 'Unauthorized - user ID not found' },
+        });
+      }
+
+      // Verify conversation exists and belongs to user (composite key lookup)
       const conversation = await fastify.prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { userId: true },
+        where: {
+          userId_id: {
+            userId,
+            id: conversationId,
+          },
+        },
+        select: { id: true },
       });
 
       if (!conversation) {
         return reply.status(404).send({
           success: false,
           error: { message: 'Conversation not found' },
-        });
-      }
-
-      if (conversation.userId !== (request.userId ?? null)) {
-        return reply.status(403).send({
-          success: false,
-          error: { message: 'Access denied to this conversation' },
         });
       }
 

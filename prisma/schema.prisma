@@ -16,8 +16,8 @@ datasource db {
 // ============================================================================
 
 model Conversation {
-  id                 String    @id @default(cuid())
-  userId             String?   /// Clerk user ID - null for anonymous/demo conversations
+  id                 String    /// User-scoped conversation ID (e.g., 'conv-123')
+  userId             String    /// Clerk user ID - required for user-scoped conversations
   topic              String?
   lastActiveBranchId String?   /// Track current branch explicitly (not via updatedAt)
   metadata           Json?
@@ -29,6 +29,7 @@ model Conversation {
   clusters  Cluster[]
   messages  Message[]
 
+  @@id([userId, id])  /// Composite primary key: userId + conversationId
   @@index([active])
   @@index([userId])
   @@map("conversations")
@@ -38,8 +39,9 @@ model Conversation {
 /// Patent Claims 2, 3, 7, 17: Advisory cluster index with health status
 model Cluster {
   id             String       @id @default(cuid())
+  userId         String
   conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [userId, conversationId], references: [userId, id], onDelete: Cascade)
   
   name           String       /// Auto-generated cluster name
   description    String?
@@ -55,10 +57,10 @@ model Cluster {
   metadata       Json?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  
+
   memberships    ClusterMembership[]
 
-  @@index([conversationId])
+  @@index([userId, conversationId])
   @@index([health])
   @@index([staleness])
   @@map("clusters")
@@ -92,8 +94,9 @@ model ClusterMembership {
 /// Patent Claims 1-6: Branch creation with preserved ancestry
 model Branch {
   id               String       @id @default(cuid())
+  userId           String
   conversationId   String
-  conversation     Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation     Conversation @relation(fields: [userId, conversationId], references: [userId, id], onDelete: Cascade)
   
   /// Parent branch (structural ancestry - immutable)
   parentId         String?
@@ -134,7 +137,7 @@ model Branch {
   mergeEdgesFrom   MergeEdge[]  @relation("MergeEdgeSource")
   mergeEdgesTo     MergeEdge[]  @relation("MergeEdgeTarget")
 
-  @@index([conversationId])
+  @@index([userId, conversationId])
   @@index([parentId])
   @@index([status])
   @@map("branches")
@@ -145,8 +148,9 @@ model Message {
   id        String   @id @default(cuid())
   branchId  String
   branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  userId         String
   conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [userId, conversationId], references: [userId, id], onDelete: Cascade)
   
   role      String   /// 'user' | 'assistant'
   content   String
@@ -173,7 +177,7 @@ model Message {
   mergeEdges MergeEdge[]
 
   @@index([branchId])
-  @@index([conversationId])
+  @@index([userId, conversationId])
   @@index([createdAt])
   @@map("messages")
 }

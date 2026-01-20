@@ -38,8 +38,13 @@ export async function executeRoute(ctx: DriftContext): Promise<DriftContext> {
 
     case 'BRANCH':
       // Create new branch
+      if (!ctx.userId) {
+        throw new Error('userId is required');
+      }
+
       const newBranch = await prisma.branch.create({
         data: {
+          userId: ctx.userId,
           conversationId: ctx.conversationId,
           parentId: ctx.currentBranch?.id ?? null,
           summary: ctx.classification?.newBranchTopic ?? ctx.content.slice(0, 100), // Initial summary from first message
@@ -86,9 +91,14 @@ export async function executeRoute(ctx: DriftContext): Promise<DriftContext> {
   }
 
   // Create message with drift routing info
+  if (!ctx.userId) {
+    throw new Error('userId is required');
+  }
+
   const message = await prisma.message.create({
     data: {
       branchId,
+      userId: ctx.userId,
       conversationId: ctx.conversationId,
       role: ctx.role,
       content: ctx.content,
@@ -98,9 +108,18 @@ export async function executeRoute(ctx: DriftContext): Promise<DriftContext> {
     },
   });
 
-  // Update conversation's lastActiveBranchId to track current branch
+  // Update conversation's lastActiveBranchId to track current branch (composite key)
+  if (!ctx.userId) {
+    throw new Error('userId is required');
+  }
+
   await prisma.conversation.update({
-    where: { id: ctx.conversationId },
+    where: {
+      userId_id: {
+        userId: ctx.userId,
+        id: ctx.conversationId,
+      },
+    },
     data: { lastActiveBranchId: branchId },
   });
 

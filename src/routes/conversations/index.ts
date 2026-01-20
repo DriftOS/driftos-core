@@ -178,9 +178,22 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       const { conversationId } = request.params;
+      const userId = request.userId;
+
+      if (!userId) {
+        return reply.status(401).send({
+          success: false,
+          error: { message: 'Unauthorized - user ID not found' },
+        });
+      }
 
       const conversation = await fastify.prisma.conversation.findUnique({
-        where: { id: conversationId },
+        where: {
+          userId_id: {
+            userId,
+            id: conversationId,
+          },
+        },
         include: {
           _count: { select: { branches: true } },
           branches: {
@@ -194,14 +207,6 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         return reply.status(404).send({
           success: false,
           error: { message: 'Conversation not found' },
-        });
-      }
-
-      // Check ownership
-      if (conversation.userId !== (request.userId ?? null)) {
-        return reply.status(403).send({
-          success: false,
-          error: { message: 'Access denied to this conversation' },
         });
       }
 
@@ -280,9 +285,22 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     async (request, reply) => {
       const { conversationId } = request.params;
       const { allBranches, maxMessages = 200 } = request.query;
+      const userId = request.userId;
+
+      if (!userId) {
+        return reply.status(401).send({
+          success: false,
+          error: { message: 'Unauthorized - user ID not found' },
+        });
+      }
 
       const conversation = await fastify.prisma.conversation.findUnique({
-        where: { id: conversationId },
+        where: {
+          userId_id: {
+            userId,
+            id: conversationId,
+          },
+        },
         include: {
           branches: {
             include: {
@@ -300,14 +318,6 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         return reply.status(404).send({
           success: false,
           error: { message: 'Conversation not found' },
-        });
-      }
-
-      // Check ownership
-      if (conversation.userId !== (request.userId ?? null)) {
-        return reply.status(403).send({
-          success: false,
-          error: { message: 'Access denied to this conversation' },
         });
       }
 
@@ -395,11 +405,24 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       const { conversationId } = request.params;
+      const userId = request.userId;
 
-      // Verify conversation exists and belongs to user
+      if (!userId) {
+        return reply.status(401).send({
+          success: false,
+          error: { message: 'Unauthorized - user ID not found' },
+        });
+      }
+
+      // Verify conversation exists and belongs to user (composite key lookup)
       const conversation = await fastify.prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { userId: true },
+        where: {
+          userId_id: {
+            userId,
+            id: conversationId,
+          },
+        },
+        select: { id: true },
       });
 
       if (!conversation) {
@@ -409,16 +432,8 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         });
       }
 
-      // Check ownership
-      if (conversation.userId !== (request.userId ?? null)) {
-        return reply.status(403).send({
-          success: false,
-          error: { message: 'Access denied to this conversation' },
-        });
-      }
-
       const branches = await fastify.prisma.branch.findMany({
-        where: { conversationId },
+        where: { userId, conversationId },
         include: {
           _count: { select: { messages: true } },
         },
@@ -525,11 +540,24 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
     },
     async (request, reply) => {
       const { conversationId } = request.params;
+      const userId = request.userId;
 
-      // Verify conversation exists and belongs to user
+      if (!userId) {
+        return reply.status(401).send({
+          success: false,
+          error: { message: 'Unauthorized - user ID not found' },
+        });
+      }
+
+      // Verify conversation exists and belongs to user (composite key lookup)
       const conversation = await fastify.prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { userId: true },
+        where: {
+          userId_id: {
+            userId,
+            id: conversationId,
+          },
+        },
+        select: { id: true },
       });
 
       if (!conversation) {
@@ -539,17 +567,14 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         });
       }
 
-      // Check ownership
-      if (conversation.userId !== (request.userId ?? null)) {
-        return reply.status(403).send({
-          success: false,
-          error: { message: 'Access denied to this conversation' },
-        });
-      }
-
       // Delete the conversation (cascading deletes will handle branches and messages)
       await fastify.prisma.conversation.delete({
-        where: { id: conversationId },
+        where: {
+          userId_id: {
+            userId,
+            id: conversationId,
+          },
+        },
       });
 
       return reply.send({
