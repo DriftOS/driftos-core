@@ -1,6 +1,6 @@
 {
   "name": "driftos-core",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Conversation routing and context management for AI applications",
   "author": "Scott Waddell",
   "license": "MIT",
