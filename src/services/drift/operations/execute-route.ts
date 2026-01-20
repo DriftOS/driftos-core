@@ -163,7 +163,7 @@ async function updateCentroid(branchId: string, newEmbedding: number[]): Promise
   });
 
   const messageCount = branch._count.messages;
-  const oldCentroid = branch.centroid as number[];
+  const oldCentroid = branch.centroid;
 
   const updatedCentroid = calculateCentroid(oldCentroid, newEmbedding, messageCount);
 

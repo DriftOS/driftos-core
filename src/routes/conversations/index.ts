@@ -75,7 +75,9 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         description: 'List conversations filtered by ID prefix (for device-based access)',
         tags: ['Conversations'],
         querystring: Type.Object({
-          prefix: Type.Optional(Type.String({ description: 'Conversation ID prefix to filter by' })),
+          prefix: Type.Optional(
+            Type.String({ description: 'Conversation ID prefix to filter by' })
+          ),
           limit: Type.Optional(Type.Number({ default: 50, maximum: 100 })),
           offset: Type.Optional(Type.Number({ default: 0, minimum: 0 })),
         }),
@@ -462,7 +464,9 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         description: 'Delete all conversations for the authenticated user',
         tags: ['Conversations'],
         querystring: Type.Object({
-          prefix: Type.Optional(Type.String({ description: 'Only delete conversations with this ID prefix' })),
+          prefix: Type.Optional(
+            Type.String({ description: 'Only delete conversations with this ID prefix' })
+          ),
         }),
         response: {
           200: Type.Object({

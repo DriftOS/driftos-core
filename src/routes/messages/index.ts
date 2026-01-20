@@ -68,7 +68,13 @@ const messageRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { conversationId, content, role = 'user', currentBranchId, extractFacts } = request.body;
+      const {
+        conversationId,
+        content,
+        role = 'user',
+        currentBranchId,
+        extractFacts,
+      } = request.body;
       const userId = request.userId;
 
       if (!userId) {
@@ -98,7 +104,11 @@ const messageRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
       // Get optional routing model override from headers
       const routingModel = request.headers['x-routing-model'] as string | undefined;
-      const routingProvider = request.headers['x-routing-provider'] as 'groq' | 'openai' | 'anthropic' | undefined;
+      const routingProvider = request.headers['x-routing-provider'] as
+        | 'groq'
+        | 'openai'
+        | 'anthropic'
+        | undefined;
 
       // Route message through drift service
       const result = await driftService.route(conversationId, content, {
