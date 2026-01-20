@@ -31,10 +31,16 @@ primary_region = 'lhr'
   LLM_PROVIDER = 'groq'
   LLM_MODEL = 'llama-3.1-8b-instant'
   LLM_TIMEOUT = '5000'
-  
+
+  # Operation-specific LLM Models
+  DRIFT_ROUTING_MODEL = 'openai/gpt-oss-20b'
+  FACT_EXTRACTION_MODEL = 'openai/gpt-oss-20b'
+  CHAT_MODEL = 'llama-3.1-8b-instant'
+  DEMO_MODEL = 'llama-3.1-8b-instant'
+
   # Drift
   DRIFT_MAX_BRANCHES_CONTEXT = '10'
-  
+
   # Embeddings (local)
   EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2'
 
