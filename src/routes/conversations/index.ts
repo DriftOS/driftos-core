@@ -1,5 +1,6 @@
 import { Type } from '@sinclair/typebox';
 import type { FastifyPluginAsyncTypebox } from '@fastify/type-provider-typebox';
+import { randomBytes } from 'crypto';
 
 /**
  * Conversations Routes
@@ -51,8 +52,14 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
       const { topic = 'New Chat' } = request.body;
 
+      // Generate a unique conversation ID (user-scoped)
+      const conversationId = `conv-${randomBytes(12).toString('base64url')}`;
+
       const conversation = await fastify.prisma.conversation.create({
-        data: { userId },
+        data: {
+          id: conversationId,
+          userId,
+        },
       });
 
       return reply.status(201).send({
@@ -167,6 +174,10 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
               updatedAt: Type.String(),
             }),
           }),
+          401: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({ message: Type.String() }),
+          }),
           403: Type.Object({
             success: Type.Literal(false),
             error: Type.Object({ message: Type.String() }),
@@ -272,6 +283,10 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
                 })
               ),
             }),
+          }),
+          401: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({ message: Type.String() }),
           }),
           403: Type.Object({
             success: Type.Literal(false),
@@ -393,6 +408,10 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
                 updatedAt: Type.String(),
               })
             ),
+          }),
+          401: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({ message: Type.String() }),
           }),
           403: Type.Object({
             success: Type.Literal(false),
@@ -530,6 +549,10 @@ const conversationsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
               id: Type.String(),
               deletedAt: Type.String(),
             }),
+          }),
+          401: Type.Object({
+            success: Type.Literal(false),
+            error: Type.Object({ message: Type.String() }),
           }),
           403: Type.Object({
             success: Type.Literal(false),
