@@ -148,7 +148,7 @@ async function callGroq(
   const requestParams: any = {
     model,
     messages,
-    max_tokens: extractFacts ? 2000 : 500, // More tokens for fact extraction, less for routing-only
+    max_tokens: extractFacts ? 2000 : 800, // More tokens for fact extraction, conservative for routing-only
   };
 
   // Only add temperature if model supports it
@@ -211,7 +211,7 @@ async function callAnthropic(
     },
     body: JSON.stringify({
       model,
-      max_tokens: extractFacts ? 2000 : 500, // More tokens for fact extraction, less for routing-only
+      max_tokens: extractFacts ? 2000 : 800, // More tokens for fact extraction, conservative for routing-only
       messages: [{ role: 'user', content: finalPrompt }],
     }),
   });
@@ -247,7 +247,7 @@ async function callOpenAI(
   const body: Record<string, unknown> = {
     model,
     messages: [{ role: 'user', content: finalPrompt }],
-    max_tokens: extractFacts ? 2000 : 500, // More tokens for fact extraction, less for routing-only
+    max_tokens: extractFacts ? 2000 : 800, // More tokens for fact extraction, conservative for routing-only
   };
 
   // Only add temperature if model supports it

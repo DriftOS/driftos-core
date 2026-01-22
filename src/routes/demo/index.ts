@@ -215,8 +215,8 @@ const demoRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
       const { conversationId, messages, extractFacts } = request.body;
 
-      // Default to facts extraction enabled (driftos-core uses LLM routing with facts)
-      const shouldExtractFacts = extractFacts ?? true;
+      // Default to facts extraction disabled (routing-only mode for better reliability)
+      const shouldExtractFacts = extractFacts ?? false;
 
       // Security: Sanitize messages (rate limiting handled by gateway)
       const sanitizedMessages = messages
