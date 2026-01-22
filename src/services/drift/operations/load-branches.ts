@@ -11,18 +11,7 @@ export async function loadBranches(ctx: DriftContext): Promise<DriftContext> {
     throw new Error('userId is required');
   }
 
-  // Get conversation to check lastActiveBranchId (composite key lookup)
-  const conversation = await prisma.conversation.findUnique({
-    where: {
-      userId_id: {
-        userId: ctx.userId,
-        id: ctx.conversationId,
-      },
-    },
-    select: { lastActiveBranchId: true },
-  });
-
-  // Get all branches for this conversation
+  // Get all branches for this conversation (user-scoped query ensures security)
   const branches = await prisma.branch.findMany({
     where: { userId: ctx.userId, conversationId: ctx.conversationId },
     include: {
@@ -37,12 +26,24 @@ export async function loadBranches(ctx: DriftContext): Promise<DriftContext> {
     return ctx;
   }
 
+  // Get conversation to check lastActiveBranchId (composite key lookup)
+  // Only query if we have branches (conversation must exist if branches exist)
+  const conversation = await prisma.conversation.findUnique({
+    where: {
+      userId_id: {
+        userId: ctx.userId,
+        id: ctx.conversationId,
+      },
+    },
+    select: { lastActiveBranchId: true },
+  });
+
   // Find current branch (priority: explicit ctx.currentBranchId > conversation.lastActiveBranchId > most recent)
   const currentBranch = ctx.currentBranchId
     ? branches.find((b) => b.id === ctx.currentBranchId)
     : conversation?.lastActiveBranchId
-    ? branches.find((b) => b.id === conversation.lastActiveBranchId)
-    : branches[0]; // Fallback to most recently updated
+      ? branches.find((b) => b.id === conversation.lastActiveBranchId)
+      : branches[0]; // Fallback to most recently updated
 
   if (!currentBranch) {
     throw new Error(`Branch not found: ${ctx.currentBranchId || conversation?.lastActiveBranchId}`);

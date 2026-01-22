@@ -57,7 +57,21 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
       // Get optional routing model override from headers
       const routingModel = request.headers['x-routing-model'] as string | undefined;
-      const routingProvider = request.headers['x-routing-provider'] as 'groq' | 'openai' | 'anthropic' | undefined;
+      const routingProvider = request.headers['x-routing-provider'] as
+        | 'groq'
+        | 'openai'
+        | 'anthropic'
+        | undefined;
+
+      // DEBUG: Log userId and headers
+      fastify.log.info(
+        {
+          userId: request.userId,
+          xUserId: request.headers['x-user-id'],
+          allHeaders: request.headers,
+        },
+        'POST /drift/route - userId debug'
+      );
 
       const result = await driftService.route(conversationId, content, {
         role,
@@ -78,12 +92,15 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
 
       // Add token usage to response headers for gateway tracking
       if (result.data?.metadata?.tokenUsage) {
-        reply.header('X-Token-Input', result.data.metadata.tokenUsage.inputTokens.toString());
-        reply.header('X-Token-Output', result.data.metadata.tokenUsage.outputTokens.toString());
-        reply.header('X-Token-Total', result.data.metadata.tokenUsage.totalTokens.toString());
+        void reply.header('X-Token-Input', result.data.metadata.tokenUsage.inputTokens.toString());
+        void reply.header(
+          'X-Token-Output',
+          result.data.metadata.tokenUsage.outputTokens.toString()
+        );
+        void reply.header('X-Token-Total', result.data.metadata.tokenUsage.totalTokens.toString());
       }
       if (result.data?.metadata?.llmModel) {
-        reply.header('X-LLM-Model', result.data.metadata.llmModel);
+        void reply.header('X-LLM-Model', result.data.metadata.llmModel);
       }
 
       return reply.send({
@@ -126,15 +143,19 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       // Verify conversation exists and belongs to user
       const conversation = await fastify.prisma.conversation.findUnique({
         where: {
-          id: conversationId,
+          userId_id: {
+            userId: request.userId ?? '',
+            id: conversationId,
+          },
         },
         select: { userId: true },
       });
 
+      // If conversation doesn't exist, return empty branches array (new conversation)
       if (!conversation) {
-        return reply.status(404).send({
-          success: false,
-          error: { message: 'Conversation not found' },
+        return reply.send({
+          success: true,
+          data: [],
         });
       }
 
@@ -147,7 +168,10 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       }
 
       const branches = await fastify.prisma.branch.findMany({
-        where: { conversationId },
+        where: {
+          userId: request.userId ?? '',
+          conversationId,
+        },
         include: {
           _count: {
             select: { messages: true, facts: true },
@@ -191,6 +215,9 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       return reply.send(health);
     }
   );
+
+  // Satisfy async requirement
+  await Promise.resolve();
 };
 
 export default driftRoutes;
