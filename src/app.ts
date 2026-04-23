@@ -89,19 +89,34 @@ export async function buildApp() {
     { prefix: `${app.config.API_PREFIX}/${app.config.API_VERSION}` }
   );
 
-  app.setErrorHandler(async (error: Error & { statusCode?: number }, request, reply) => {
-    request.log.error({ err: error });
-    const statusCode = error.statusCode || 500;
-    return reply.status(statusCode).send({
-      success: false,
-      error: {
-        message: error.message || 'Internal Server Error',
-        statusCode,
-        requestId: request.id,
-        timestamp: new Date().toISOString(),
-      },
-    });
-  });
+  app.setErrorHandler(
+    async (
+      error: Error & { statusCode?: number; validation?: unknown },
+      request,
+      reply
+    ) => {
+      request.log.error({ err: error });
+      // Validation failures are user-input errors, not server errors
+      const statusCode = error.validation ? 400 : error.statusCode || 500;
+      const body = {
+        success: false,
+        error: {
+          message: error.message || 'Internal Server Error',
+          statusCode,
+          requestId: request.id,
+          timestamp: new Date().toISOString(),
+        },
+      };
+      // Pre-serialize to bypass the response-schema validator. Without this,
+      // per-route 400/404/etc response schemas reject our envelope shape when
+      // the serializer runs against the default FastifyError (no `success` key),
+      // and Fastify falls back to FST_ERR_FAILED_ERROR_SERIALIZATION → 500.
+      return reply
+        .status(statusCode)
+        .type('application/json')
+        .send(JSON.stringify(body));
+    }
+  );
 
   app.setNotFoundHandler((request, reply) => {
     return reply.status(404).send({
