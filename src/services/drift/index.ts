@@ -1,5 +1,5 @@
 import { DriftOrchestrator } from './orchestrator.js';
-import type { DriftResult, DriftInput } from './types/index.js';
+import type { DriftResult, DriftInput, BranchMode } from './types/index.js';
 import type { OrchestratorResult } from '@core/orchestration/index.js';
 
 /**
@@ -34,6 +34,8 @@ export class DriftService {
       routingModel?: string;
       routingProvider?: 'groq' | 'openai' | 'anthropic';
       extractFacts?: boolean;
+      branchMode?: BranchMode;
+      targetBranchId?: string;
     } = {}
   ): Promise<OrchestratorResult<DriftResult>> {
     const input: DriftInput = {
@@ -46,6 +48,8 @@ export class DriftService {
       routingModel: options.routingModel,
       routingProvider: options.routingProvider,
       extractFacts: options.extractFacts,
+      branchMode: options.branchMode,
+      targetBranchId: options.targetBranchId,
     };
 
     return this.orchestrator.execute(input);

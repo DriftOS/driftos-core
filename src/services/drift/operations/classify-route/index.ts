@@ -29,6 +29,20 @@ export async function classifyRoute(ctx: DriftContext): Promise<DriftContext> {
     return ctx;
   }
 
+  // User-pinned branch: caller explicitly chose the target. Skip the LLM entirely.
+  // Ownership of ctx.targetBranchId is verified in execute-route before any write.
+  if (ctx.branchMode === 'PINNED' && ctx.targetBranchId) {
+    const isSame = currentBranch?.id === ctx.targetBranchId;
+    ctx.classification = {
+      action: isSame ? 'STAY' : 'ROUTE',
+      targetBranchId: isSame ? undefined : ctx.targetBranchId,
+      reason: 'User-pinned branch',
+      confidence: 1.0,
+    };
+    ctx.reasonCodes.push('user_forced_pin');
+    return ctx;
+  }
+
   // Build prompt for user messages (with or without facts extraction)
   const prompt = buildPrompt(ctx.content, currentBranch, otherBranches, ctx.recentMessages, extractFacts);
 

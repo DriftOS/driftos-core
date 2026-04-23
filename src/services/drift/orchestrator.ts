@@ -34,6 +34,8 @@ export class DriftOrchestrator extends BaseOrchestrator<DriftContext, DriftResul
       routingModel: input.routingModel,
       routingProvider: input.routingProvider,
       extractFacts: input.extractFacts ?? false, // Default to routing-only mode
+      branchMode: input.branchMode,
+      targetBranchId: input.targetBranchId,
       requestId: Math.random().toString(36).substr(2, 9),
       startTime: Date.now(),
       perfTracker: new DefaultPerformanceTracker(),
@@ -101,6 +103,7 @@ export class DriftOrchestrator extends BaseOrchestrator<DriftContext, DriftResul
         llmAnalysis,
         tokenUsage: ctx.tokenUsage,
         llmModel: ctx.llmModel,
+        ...(ctx.branchMode === 'PINNED' ? { pinned: true } : {}),
       },
       branchTopic: ctx.branch.summary ?? 'Unknown',
       confidence: ctx.classification?.confidence ?? 0,

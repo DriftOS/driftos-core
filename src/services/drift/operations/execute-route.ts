@@ -17,6 +17,26 @@ export async function executeRoute(ctx: DriftContext): Promise<DriftContext> {
 
   const { action, targetBranchId } = ctx.classification;
 
+  // For user-pinned routes, verify the target branch belongs to this user +
+  // conversation before writing. LLM-chosen targetBranchIds come from the
+  // already-filtered branch summaries in ctx.branches, so they're safe.
+  if (ctx.branchMode === 'PINNED' && ctx.targetBranchId) {
+    if (!ctx.userId) {
+      throw new Error('userId is required for pinned routing');
+    }
+    const pinned = await prisma.branch.findUnique({
+      where: { id: ctx.targetBranchId },
+      select: { userId: true, conversationId: true },
+    });
+    if (
+      !pinned ||
+      pinned.userId !== ctx.userId ||
+      pinned.conversationId !== ctx.conversationId
+    ) {
+      throw new Error('Invalid targetBranchId: not found in this conversation');
+    }
+  }
+
   let branchId: string;
 
   switch (action) {

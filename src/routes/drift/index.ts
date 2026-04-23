@@ -16,6 +16,12 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           role: Type.Optional(Type.Union([Type.Literal('user'), Type.Literal('assistant')])),
           currentBranchId: Type.Optional(Type.String()),
           extractFacts: Type.Optional(Type.Boolean()), // Optional: extract facts during routing (default: false)
+          // User-controlled branch targeting. PINNED skips LLM routing and forces the
+          // message onto targetBranchId (which must belong to this conversation).
+          branchMode: Type.Optional(
+            Type.Union([Type.Literal('AUTO'), Type.Literal('PINNED')])
+          ),
+          targetBranchId: Type.Optional(Type.String()),
         }),
         response: {
           200: Type.Object({
@@ -53,7 +59,22 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { conversationId, content, role, currentBranchId, extractFacts } = request.body;
+      const {
+        conversationId,
+        content,
+        role,
+        currentBranchId,
+        extractFacts,
+        branchMode,
+        targetBranchId,
+      } = request.body;
+
+      if (branchMode === 'PINNED' && !targetBranchId) {
+        return reply.status(400).send({
+          success: false,
+          error: { message: 'targetBranchId is required when branchMode is PINNED' },
+        });
+      }
 
       // Get optional routing model override from headers
       const routingModel = request.headers['x-routing-model'] as string | undefined;
@@ -81,6 +102,8 @@ const driftRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         routingModel,
         routingProvider,
         extractFacts: extractFacts ?? false, // Default to routing-only mode
+        branchMode,
+        targetBranchId,
       });
 
       if (!result.success) {

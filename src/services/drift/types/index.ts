@@ -7,6 +7,8 @@ import type { Branch, Message } from '@prisma/client';
 
 export type RouteAction = 'STAY' | 'ROUTE' | 'BRANCH';
 
+export type BranchMode = 'AUTO' | 'PINNED';
+
 /**
  * Policy configuration for drift routing
  */
@@ -30,6 +32,10 @@ export interface DriftInput {
   routingProvider?: 'groq' | 'openai' | 'anthropic';
   // Optional: extract facts during routing (default: false for routing-only mode)
   extractFacts?: boolean;
+  // User-controlled branch targeting. 'PINNED' skips LLM routing and forces the
+  // message onto `targetBranchId`. 'AUTO' (default) lets the LLM decide.
+  branchMode?: BranchMode;
+  targetBranchId?: string;
 }
 
 /**
@@ -60,6 +66,9 @@ export interface DriftContext extends OperationContext {
   routingProvider?: 'groq' | 'openai' | 'anthropic';
   // Optional: extract facts during routing (default: false)
   extractFacts?: boolean;
+  // User-controlled branch targeting
+  branchMode?: BranchMode;
+  targetBranchId?: string;
 
   reasonCodes: string[];
   currentBranch?: Branch;
