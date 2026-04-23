@@ -72,23 +72,10 @@ export async function buildApp() {
   // This service is internal-only and should only receive traffic from the gateway
   // Keeping rate limit config in env for backwards compatibility, but not applying it
 
-  await app.register(rootRoutes);
-
-  await app.register(
-    async function apiRoutes(fastify) {
-      await fastify.register(healthRoutes);
-      await fastify.register(driftRoutes, { prefix: '/drift' });
-      await fastify.register(factsRoutes, { prefix: '/facts' });
-      await fastify.register(contextRoutes, { prefix: '/context' });
-      await fastify.register(llmRoutes, { prefix: '/llm' });
-      await fastify.register(demoRoutes, { prefix: '/demo' });
-      await fastify.register(conversationsRoutes, { prefix: '/conversations' });
-      await fastify.register(branchRoutes, { prefix: '/branches' });
-      await fastify.register(messageRoutes, { prefix: '/messages' });
-    },
-    { prefix: `${app.config.API_PREFIX}/${app.config.API_VERSION}` }
-  );
-
+  // Register error handler BEFORE routes. Fastify v5 encapsulates setErrorHandler
+  // to the scope in which it's called — plugins registered before this call use
+  // the default handler, so routes have to come after for our envelope to apply
+  // to their validation errors.
   app.setErrorHandler(
     (
       error: Error & { statusCode?: number; validation?: unknown },
@@ -119,6 +106,23 @@ export async function buildApp() {
       reply.raw.setHeader('content-length', Buffer.byteLength(payload));
       reply.raw.end(payload);
     }
+  );
+
+  await app.register(rootRoutes);
+
+  await app.register(
+    async function apiRoutes(fastify) {
+      await fastify.register(healthRoutes);
+      await fastify.register(driftRoutes, { prefix: '/drift' });
+      await fastify.register(factsRoutes, { prefix: '/facts' });
+      await fastify.register(contextRoutes, { prefix: '/context' });
+      await fastify.register(llmRoutes, { prefix: '/llm' });
+      await fastify.register(demoRoutes, { prefix: '/demo' });
+      await fastify.register(conversationsRoutes, { prefix: '/conversations' });
+      await fastify.register(branchRoutes, { prefix: '/branches' });
+      await fastify.register(messageRoutes, { prefix: '/messages' });
+    },
+    { prefix: `${app.config.API_PREFIX}/${app.config.API_VERSION}` }
   );
 
   app.setNotFoundHandler((request, reply) => {
