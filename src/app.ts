@@ -90,7 +90,7 @@ export async function buildApp() {
   );
 
   app.setErrorHandler(
-    async (
+    (
       error: Error & { statusCode?: number; validation?: unknown },
       request,
       reply
@@ -98,7 +98,7 @@ export async function buildApp() {
       request.log.error({ err: error });
       // Validation failures are user-input errors, not server errors
       const statusCode = error.validation ? 400 : error.statusCode || 500;
-      const body = {
+      const payload = JSON.stringify({
         success: false,
         error: {
           message: error.message || 'Internal Server Error',
@@ -106,15 +106,18 @@ export async function buildApp() {
           requestId: request.id,
           timestamp: new Date().toISOString(),
         },
-      };
-      // Pre-serialize to bypass the response-schema validator. Without this,
-      // per-route 400/404/etc response schemas reject our envelope shape when
-      // the serializer runs against the default FastifyError (no `success` key),
-      // and Fastify falls back to FST_ERR_FAILED_ERROR_SERIALIZATION → 500.
-      return reply
-        .status(statusCode)
-        .type('application/json')
-        .send(JSON.stringify(body));
+      });
+      // Write directly on the raw response — Fastify's reply.send() still runs
+      // the per-route response-schema serializer in v5 even when passed a
+      // pre-serialized string, and with a strict 400 schema that expects our
+      // `{success,error}` envelope, the default FastifyError shape fails
+      // serialization and Fastify emits FST_ERR_FAILED_ERROR_SERIALIZATION as
+      // a 500. Going through reply.raw skips that entire path.
+      reply.hijack();
+      reply.raw.statusCode = statusCode;
+      reply.raw.setHeader('content-type', 'application/json; charset=utf-8');
+      reply.raw.setHeader('content-length', Buffer.byteLength(payload));
+      reply.raw.end(payload);
     }
   );
 
