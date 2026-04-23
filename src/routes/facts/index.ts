@@ -24,6 +24,10 @@ const factsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
                   key: Type.String(),
                   value: Type.String(),
                   confidence: Type.Number(),
+                  // messageIds is the real source-of-truth array (Prisma model
+                  // supports multi-message provenance). messageId is kept for
+                  // backwards compat and surfaces the first message.
+                  messageIds: Type.Array(Type.String()),
                   messageId: Type.Union([Type.String(), Type.Null()]),
                   createdAt: Type.String(),
                   branchId: Type.String(),
@@ -57,6 +61,8 @@ const factsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
           ...result.data!,
           facts: result.data!.facts.map((f) => ({
             ...f,
+            messageIds: f.messageIds ?? [],
+            messageId: f.messageIds?.[0] ?? null,
             createdAt: f.createdAt.toISOString(),
           })),
         },
@@ -83,6 +89,10 @@ const factsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
                 key: Type.String(),
                 value: Type.String(),
                 confidence: Type.Number(),
+                // messageIds is the real source-of-truth array (Prisma model
+                // supports multi-message provenance). messageId is kept for
+                // backwards compat and surfaces the first message.
+                messageIds: Type.Array(Type.String()),
                 messageId: Type.Union([Type.String(), Type.Null()]),
                 createdAt: Type.String(),
                 branchId: Type.String(),
@@ -104,6 +114,8 @@ const factsRoutes: FastifyPluginAsyncTypebox = async (fastify) => {
         success: true,
         data: facts.map((f) => ({
           ...f,
+          messageIds: f.messageIds ?? [],
+          messageId: f.messageIds?.[0] ?? null,
           createdAt: f.createdAt.toISOString(),
         })),
       });
