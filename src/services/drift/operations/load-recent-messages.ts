@@ -13,14 +13,17 @@ export async function loadRecentMessages(ctx: DriftContext): Promise<DriftContex
     return ctx;
   }
 
-  // Load last 5 messages from current branch (user messages only for context)
+  // Load last 6 messages (both roles) so the router can see user↔assistant
+  // context, not just bare user turns. Without assistant replies the router
+  // can't tell a follow-up like "what was the exact error?" from a brand-new
+  // user topic, and mis-branches. 6 ≈ 3 turns, enough for short-term context
+  // without bloating the prompt.
   const messages = await prisma.message.findMany({
     where: {
       branchId: ctx.currentBranch.id,
-      role: 'user',
     },
     orderBy: { createdAt: 'desc' },
-    take: 5,
+    take: 6,
     select: {
       role: true,
       content: true,
