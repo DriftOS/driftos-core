@@ -34,8 +34,19 @@ function formatConversationHistory(
 ): string {
   if (!recentMessages || recentMessages.length === 0) return '';
 
+  // Collapse all whitespace (newlines, tabs, repeated spaces) into single
+  // spaces so markdown headers / horizontal rules / code fences inside an
+  // assistant message can't leak as structural cues into the routing prompt.
+  // Without this, a truncated assistant reply containing `---` or `## …`
+  // produces a section break right before `New message:`, and the LLM ends
+  // up classifying the user's follow-up as a meta instruction for the router
+  // instead of a continuation of the topic. Slice raised to 240 so short
+  // follow-ups like "Draft it" still have enough surrounding context to glue
+  // to.
+  const sanitize = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 240);
+
   return '\n\nRecent Messages in This Topic:\n' +
-    recentMessages.map((m) => `${m.role}: ${m.content.slice(0, 100)}`).join('\n');
+    recentMessages.map((m) => `${m.role}: ${sanitize(m.content)}`).join('\n');
 }
 
 // ============================================================================
