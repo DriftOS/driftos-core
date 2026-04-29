@@ -91,7 +91,10 @@ OUTPUT FORMAT (respond with ONLY this JSON, no other text):
   const body: Record<string, unknown> = {
     model: modelId,
     messages: [{ role: 'user', content: prompt }],
-    max_tokens: 1000,
+    // 1000 was getting truncated for branches with 20+ messages — Groq's JSON
+    // mode rejects unclosed payloads with `json_validate_failed` and returns
+    // an empty `failed_generation`. Matches the combined routing+facts call.
+    max_tokens: 2000,
   };
 
   // Only add temperature if model supports it
