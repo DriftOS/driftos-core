@@ -34,16 +34,27 @@ function formatConversationHistory(
 ): string {
   if (!recentMessages || recentMessages.length === 0) return '';
 
-  // Collapse all whitespace (newlines, tabs, repeated spaces) into single
-  // spaces so markdown headers / horizontal rules / code fences inside an
-  // assistant message can't leak as structural cues into the routing prompt.
-  // Without this, a truncated assistant reply containing `---` or `## …`
-  // produces a section break right before `New message:`, and the LLM ends
-  // up classifying the user's follow-up as a meta instruction for the router
-  // instead of a continuation of the topic. Slice raised to 240 so short
-  // follow-ups like "Draft it" still have enough surrounding context to glue
-  // to.
-  const sanitize = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 240);
+  // Two things going on here:
+  //
+  // 1. Whitespace is collapsed to single spaces so markdown headers /
+  //    horizontal rules / code fences inside an assistant message can't leak
+  //    as structural cues into the routing prompt. Without this, a truncated
+  //    reply containing `---` or `## …` produces a section break right before
+  //    `New message:`, and the LLM mis-reads the user's follow-up as a meta
+  //    instruction for the router itself.
+  //
+  // 2. We keep a HEAD and a TAIL of each message rather than just the first
+  //    N chars. Assistants commonly end with a CTA ("Want me to draft this
+  //    as a LinkedIn post?") and that CTA is what terse user follow-ups
+  //    ("Yeah draft it") are responding to. A head-only slice loses the
+  //    hook entirely and the router has nothing to glue the follow-up to.
+  const sanitize = (s: string) => {
+    const flat = s.replace(/\s+/g, ' ').trim();
+    const HEAD = 120;
+    const TAIL = 200;
+    if (flat.length <= HEAD + TAIL + 8) return flat;
+    return `${flat.slice(0, HEAD)} … ${flat.slice(-TAIL)}`;
+  };
 
   return '\n\nRecent Messages in This Topic:\n' +
     recentMessages.map((m) => `${m.role}: ${sanitize(m.content)}`).join('\n');
@@ -74,6 +85,16 @@ ROUTING RULES:
 - ROUTE: Message fits an OTHER topic better - semantically related topics should share branches (return topic NUMBER)
 - BRANCH: Message is fundamentally different - needs separate memory. MUST provide a short topic name (3-6 words).
 
+CRITICAL — IMMEDIATE-TURN CONTINUATION:
+If the new message is a short reply, confirmation, or imperative that is
+clearly responding to the LAST assistant turn (e.g. "yes", "do it", "draft
+it", "go ahead", "yeah do that", "send it"), you MUST choose STAY — even if
+the verb appears to match another topic's name. The user is acting on the
+context that lives in the CURRENT branch; routing elsewhere strands them
+from the very thing they're responding to. STAY wins.
+
+Ask: "Is this message a direct response to what the assistant JUST said?"
+  → Yes = STAY (overrides everything below)
 Ask: "Would the AI respond BETTER with current context?" → Yes = STAY
 Ask: "Is this semantically related to an existing topic?" → Yes = ROUTE to that topic
 Ask: "Is this a completely different domain/category?" → Yes = BRANCH
@@ -120,6 +141,16 @@ ROUTING RULES:
 - ROUTE: Message fits an OTHER topic better - semantically related topics should share branches (return topic NUMBER)
 - BRANCH: Message is fundamentally different - needs separate memory. MUST provide a short topic name (3-6 words).
 
+CRITICAL — IMMEDIATE-TURN CONTINUATION:
+If the new message is a short reply, confirmation, or imperative that is
+clearly responding to the LAST assistant turn (e.g. "yes", "do it", "draft
+it", "go ahead", "yeah do that", "send it"), you MUST choose STAY — even if
+the verb appears to match another topic's name. The user is acting on the
+context that lives in the CURRENT branch; routing elsewhere strands them
+from the very thing they're responding to. STAY wins.
+
+Ask: "Is this message a direct response to what the assistant JUST said?"
+  → Yes = STAY (overrides everything below)
 Ask: "Would the AI respond BETTER with current context?" → Yes = STAY
 Ask: "Is this semantically related to an existing topic?" → Yes = ROUTE to that topic
 Ask: "Is this a completely different domain/category?" → Yes = BRANCH
